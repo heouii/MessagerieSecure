@@ -2,14 +2,16 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Message extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'sujet', 'contenu'];
+    protected $fillable = [
+        'user_id', 'sujet', 'contenu', 'status', 'piece_jointe'
+    ];
 
     public function user()
     {

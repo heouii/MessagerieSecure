@@ -12,15 +12,18 @@ return new class extends Migration
     public function up()
     {
         Schema::table('messages', function (Blueprint $table) {
-            $table->string('status')->default('inbox'); // 'inbox', 'sent', 'draft', 'spam', 'deleted'
+            $table->string('piece_jointe')->nullable()->after('contenu');
         });
     }
     
-    public function down()
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
     {
         Schema::table('messages', function (Blueprint $table) {
-            $table->dropColumn('status');
+            //
         });
     }
-    
 };

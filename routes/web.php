@@ -31,9 +31,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/messages/drafts', [MessageController::class, 'drafts'])->name('messages.drafts');
     Route::get('/messages/spam', [MessageController::class, 'spam'])->name('messages.spam');
     Route::get('/messages/deleted', [MessageController::class, 'deleted'])->name('messages.deleted');
+    
+    // Afficher les détails d'un message
+    Route::get('/messages/{message}', [MessageController::class, 'show'])->name('messages.show');
 });
 
-//2MFA
+// 2MFA
 Route::middleware(['auth'])->group(function () {
     Route::get('two-factor', [TwoFactorController::class, 'show'])->name('two-factor.index');
     Route::post('two-factor', [TwoFactorController::class, 'verify'])->name('two-factor.verify');

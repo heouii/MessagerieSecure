@@ -6,7 +6,7 @@
         <div class="col-md-6">
             <div class="card shadow-lg border-0 rounded-4">
                 <div class="card-header text-center" style="background-color: #695F76; color: white;">
-                    <h2 class="my-3">Vérification 2FA</h2>
+                    <h2 class="my-3">Vérification 2MFA</h2>
                 </div>
 
                 <div class="card-body" style="background-color: #BAA8D3;">

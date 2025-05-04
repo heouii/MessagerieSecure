@@ -9,12 +9,13 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-    public function up(): void
+    public function up()
     {
         Schema::table('messages', function (Blueprint $table) {
-            //
+            $table->string('piece_jointe')->nullable()->after('contenu');
         });
     }
+    
 
     /**
      * Reverse the migrations.

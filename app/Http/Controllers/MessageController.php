@@ -87,7 +87,6 @@ class MessageController extends Controller
     }
     
 
-    // Envoi d'un message
     // Envoi du message
     public function store(Request $request)
     {

@@ -9,20 +9,19 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-    public function up()
+    public function up(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
-            $table->unsignedBigInteger('expediteur_id')->after('id');
+        Schema::table('users', function (Blueprint $table) {
+            //
         });
     }
-    
 
     /**
      * Reverse the migrations.
      */
     public function down(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
+        Schema::table('users', function (Blueprint $table) {
             //
         });
     }

@@ -64,10 +64,8 @@
         <div class="container d-flex justify-content-between align-items-center">
             <h1 class="h3 mb-0">Missive</h1>
             <div>
-            <a href="{{ route('login') }}" class="btn btn-outline-light me-2">Se connecter</a>
-    <a href="{{ route('register') }}" class="btn btn-light">S'inscrire</a>
-
-
+                <a href="{{ route('login') }}" class="btn btn-outline-light me-2">Se connecter</a>
+                <a href="{{ route('register') }}" class="btn btn-light">S'inscrire</a>
             </div>
         </div>
     </header>
@@ -83,17 +81,17 @@
     <section class="container my-5">
         <div class="row g-4">
             <div class="col-md-4 text-center">
-                <img src="" class="img-fluid mb-3" alt="Sécurité">
+                <img src="https://img.icons8.com/fluency/96/lock--v1.png" class="img-fluid mb-3" alt="Sécurité">
                 <h5>Confidentialité Maximale</h5>
                 <p>Vos e-mails sont chiffrés et protégés contre toute intrusion.</p>
             </div>
             <div class="col-md-4 text-center">
-                <img src="" class="img-fluid mb-3" alt="Facilité d'utilisation">
+                <img src="https://img.icons8.com/fluency/96/laptop-settings.png" class="img-fluid mb-3" alt="Facilité d'utilisation">
                 <h5>Facilité d'utilisation</h5>
                 <p>Une interface simple et intuitive, adaptée à tous les utilisateurs.</p>
             </div>
             <div class="col-md-4 text-center">
-                <img src="" class="img-fluid mb-3" alt="Compatibilité">
+                <img src="https://img.icons8.com/fluency/96/synchronize.png" class="img-fluid mb-3" alt="Compatibilité">
                 <h5>Compatibilité Totale</h5>
                 <p>Fonctionne parfaitement avec les autres services de messagerie.</p>
             </div>

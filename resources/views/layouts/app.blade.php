@@ -5,8 +5,6 @@
         @auth
         <nav class="col-md-2 d-none d-md-block sidebar">
             <div class="position-sticky">
-
-                <!-- Menu déroulant -->
                 <div class="accordion" id="mailMenu">
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingOne">
@@ -28,8 +26,8 @@
                     </div>
                 </div>
 
-                <a href="#"><i class="fas fa-user"></i> Profil</a>
-                <a href="#"><i class="fas fa-cog"></i> Paramètres</a>
+                <a href="{{ route('profil.show') }}"><i class="fas fa-user"></i> Profil</a>
+                <a href="{{ route('parametres') }}" class="nav-link">Paramètres</a>
             </div>
         </nav>
         @endauth

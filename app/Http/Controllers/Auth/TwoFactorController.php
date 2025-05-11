@@ -2,64 +2,97 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Http\Controllers\Controller; 
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Models\User;
 use PragmaRX\Google2FA\Google2FA;
+use Endroid\QrCode\Builder\Builder;
+use Endroid\QrCode\Writer\PngWriter;
+use Endroid\QrCode\Encoding\Encoding;
+use Endroid\QrCode\ErrorCorrectionLevel\ErrorCorrectionLevelLow;
+
 
 
 class TwoFactorController extends Controller
 {
-    // Afficher le formulaire avec le QR Code
     public function show()
     {
-        $google2fa = new Google2FA();
-        $user = Auth::user();
+        $userId = session('2fa:user:id');
 
-        // Générer un secret 2FA pour l'utilisateur (si ce n'est pas déjà fait)
-        if (!$user->two_factor_secret) {
-            $secret = $google2fa->generateSecretKey();
-            $user->two_factor_secret = encrypt($secret);  // Stocker le secret dans la base de données
-            $user->save();
-        } else {
-            $secret = decrypt($user->two_factor_secret);
+        if (!$userId) {
+            return redirect()->route('login');
         }
 
-        // Générer l'URL du QR Code
+        // Récupérer l'utilisateur depuis la base de données
+        $user = User::findOrFail($userId);
+        $secret = decrypt($user->two_factor_secret);
+
+        // Initialiser Google2FA
+        $google2fa = new Google2FA();
+
+        // Générer l'URL du QR code (pour scanner avec Google Authenticator)
         $QRUrl = $google2fa->getQRCodeUrl(
-            config('app.name'), // Nom de l'application (ex: "MonApp")
-            $user->email,       // Identifiant de l'utilisateur (email dans ce cas)
+            config('app.url'), 
+            $user->email,
             $secret
         );
 
-        // Passer l'URL du QR code à la vue
-        return view('auth.two-factor', compact('QRUrl'));
+        // Créer le QR code avec l'URL générée
+$result = Builder::create()
+    ->writer(new PngWriter())
+    ->data($QRUrl)
+    ->encoding(new Encoding('UTF-8'))
+    ->errorCorrectionLevel(new ErrorCorrectionLevelLow())
+    ->size(300)
+    ->margin(10)
+    ->build();
+
+$qrCodeImage = $result->getDataUri();
+
+
+        // Pour déboguer, enregistrer l'image QR Code en base64 dans les logs
+        \Log::info('QR Code Image Base64: ' . $qrCodeImage);
+
+        // Retourner la vue avec l'image QR Code générée
+        return view('auth.two-factor', compact('qrCodeImage'));
     }
 
-    // Vérifier le code 2FA
     public function verify(Request $request)
     {
-        // Valider le code 2FA
+        // Validation du code de vérification
         $request->validate([
             'code' => 'required|numeric',
         ]);
 
-        $google2fa = new Google2FA();
-        $user = Auth::user();
-        $secret = decrypt($user->two_factor_secret);
+        // Récupérer l'utilisateur de la session
+        $userId = session('2fa:user:id');
 
-        // Vérifier le code 2FA
-        if ($google2fa->verifyKey($secret, $request->code)) {
-            // Vérification réussie
-            return redirect()->intended('/dashboard');
+        if (!$userId) {
+            return redirect()->route('login');
         }
 
-        // Retourner à la page de 2FA avec un message d'erreur si la vérification échoue
+        // Récupérer l'utilisateur depuis la base de données
+        $user = User::findOrFail($userId);
+        $secret = decrypt($user->two_factor_secret);
+        
+        // Initialiser Google2FA
+        $google2fa = new Google2FA();
+
+        // Vérifier le code de vérification
+        if ($google2fa->verifyKey($secret, $request->code)) {
+            session()->forget('2fa:user:id');  // Supprimer l'utilisateur de la session
+            Auth::login($user);  // Connecter l'utilisateur
+
+            // Rediriger vers le tableau de bord ou l'admin en fonction du rôle
+            return $user->admin
+                ? redirect()->intended('/admin')
+                : redirect()->intended('/dashboard');
+        }
+
+        // Retourner un message d'erreur si le code est incorrect
         return back()->withErrors([
             'code' => 'Le code de vérification est incorrect.',
         ]);
     }
 }
-
-
-

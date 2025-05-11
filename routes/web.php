@@ -6,6 +6,9 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\MessageController;
 use Laravel\Fortify\Features;
 use App\Http\Controllers\Auth\TwoFactorController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ProfilController;
+use App\Http\Controllers\ParametreController;
 
 // Page d'accueil
 Route::get('/', function () {
@@ -37,7 +40,26 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // 2MFA
+Route::get('two-factor', [TwoFactorController::class, 'show'])->name('two-factor.index');
+Route::post('two-factor', [TwoFactorController::class, 'verify'])->name('two-factor.verify');
+
+
+
+//admin
+
+
+
+//profil
 Route::middleware(['auth'])->group(function () {
-    Route::get('two-factor', [TwoFactorController::class, 'show'])->name('two-factor.index');
-    Route::post('two-factor', [TwoFactorController::class, 'verify'])->name('two-factor.verify');
+    Route::get('/profil', [ProfilController::class, 'show'])->name('profil.show');
+    Route::post('/profil', [ProfilController::class, 'update'])->name('profil.update');
 });
+
+//parametre
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/parametres', [ParametreController::class, 'index'])->name('parametres');
+    Route::post('/parametres/delete', [ParametreController::class, 'delete'])->name('parametre.delete');
+    Route::post('/parametres/cancel-deletion', [ParametreController::class, 'cancelDeletion'])->name('parametre.cancelDeletion');
+});
+

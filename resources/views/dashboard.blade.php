@@ -28,7 +28,6 @@
     </button>
 </div>
 
-<!-- Liste des Messages -->
 <div class="row">
     @foreach($messages as $message)
     <div class="col-md-6">
@@ -47,8 +46,6 @@
     @endforeach
 </div>
 
-
-<!-- Modal pour écrire un nouveau message -->
 <div class="modal fade" id="nouveauMessage" tabindex="-1" aria-labelledby="nouveauMessageLabel" aria-hidden="true">
     <div class="modal-dialog">
         <form method="POST" action="{{ route('messages.store') }}" enctype="multipart/form-data">
@@ -78,7 +75,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                    <button type="submit" class="btn btn-primary">Envoyer</button>
+                    <button type="submit" class="btn btn-primary" >Envoyer</button>
                 </div>
             </div>
         </form>

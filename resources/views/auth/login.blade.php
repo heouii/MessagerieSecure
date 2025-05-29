@@ -1,4 +1,3 @@
-<!-- resources/views/auth/login.blade.php -->
 @extends('layouts.app')
 
 @section('content')
@@ -15,6 +14,12 @@
                     @if (session('success'))
                         <div class="alert alert-success">
                             {{ session('success') }}
+                        </div>
+                    @endif
+
+                    @if ($errors->any())
+                        <div class="alert alert-danger">
+                            <strong>Erreur :</strong> {{ $errors->first() }}
                         </div>
                     @endif
 
@@ -44,5 +49,4 @@
         </div>
     </div>
 </div>
-
 @endsection

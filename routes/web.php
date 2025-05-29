@@ -9,6 +9,8 @@ use App\Http\Controllers\Auth\TwoFactorController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ProfilController;
 use App\Http\Controllers\ParametreController;
+use App\Http\Controllers\Admin\UserController;
+
 
 // Page d'accueil
 Route::get('/', function () {
@@ -46,6 +48,14 @@ Route::post('two-factor', [TwoFactorController::class, 'verify'])->name('two-fac
 
 
 //admin
+Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () {
+    Route::get('dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
+
+    Route::get('users', [UserController::class, 'index'])->name('users');
+    Route::get('users/{user}', [UserController::class, 'show'])->name('users.show');
+    Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+    Route::patch('users/{user}/block', [UserController::class, 'block'])->name('users.block');
+});
 
 
 
@@ -62,4 +72,3 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/parametres/delete', [ParametreController::class, 'delete'])->name('parametre.delete');
     Route::post('/parametres/cancel-deletion', [ParametreController::class, 'cancelDeletion'])->name('parametre.cancelDeletion');
 });
-

@@ -39,8 +39,10 @@ class LoginController extends Controller
             return redirect()->route('two-factor.index');
         }
 
-        // Si l'utilisateur n'a pas de 2FA, rediriger vers le tableau de bord (ne devrait jamais se produire)
-        return redirect()->intended('/dashboard');
+        return $user->admin
+        ? redirect()->intended('/admin/dashboard')
+        : redirect()->intended('/dashboard');
+
     }
 
     return back()->withErrors([

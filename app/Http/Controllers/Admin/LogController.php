@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Symfony\Component\Process\Process;
 
 class LogController extends Controller
@@ -46,15 +48,23 @@ class LogController extends Controller
     }
 
     public function export(Request $request)
-{
-    $date = $request->input('date');
-    $jsonFile = base_path("storage/logs/filtered_logs_{$date}.json");
+    {
+        $request->validate([
+            'password' => 'required',
+            'date' => 'required|date_format:Y-m-d',
+        ]);
 
-    if (file_exists($jsonFile)) {
-        return response()->download($jsonFile, "logs_{$date}.json");
+        if (!Hash::check($request->input('password'), Auth::user()->password)) {
+            return back()->withErrors(['password' => 'Mot de passe incorrect.']);
+        }
+
+        $date = $request->input('date');
+        $jsonFile = base_path("storage/logs/filtered_logs_{$date}.json");
+
+        if (file_exists($jsonFile)) {
+            return response()->download($jsonFile, "logs_{$date}.json");
+        }
+
+        return back()->with('error', 'Fichier de logs non trouvé pour export.');
     }
-
-    return back()->with('error', 'Fichier de logs non trouvé pour export.');
-}
-
 }

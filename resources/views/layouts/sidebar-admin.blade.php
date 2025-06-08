@@ -15,7 +15,15 @@
                 </a>
             </li>
             <li class="nav-item mb-1">
-                <a href="{{ route('admin.logs') }}" class="nav-link {{ request()->routeIs('admin.logs') ? 'active' : '' }}"><i class="fas fa-file-alt me-2"></i> Logs
+                <a href="{{ route('admin.logs') }}" 
+                   class="nav-link {{ request()->routeIs('admin.logs') ? 'active' : '' }}">
+                    <i class="fas fa-file-code me-2"></i> Logs JSON
+                </a>
+            </li>
+            <li class="nav-item mb-1">
+                <a href="{{ route('admin.server.logs') }}" 
+                   class="nav-link {{ request()->routeIs('admin.server.logs') ? 'active' : '' }}">
+                    <i class="fas fa-server me-2"></i> Logs Serveur
                 </a>
             </li>
             <li class="nav-item mb-1">

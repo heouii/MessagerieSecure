@@ -4,7 +4,6 @@ import sys
 import os
 from datetime import datetime
 
-# Chemin absolu depuis le répertoire du projet Laravel
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 log_file = os.path.join(BASE_DIR, 'storage/logs/laravel.log')
 
@@ -28,8 +27,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     date_filter = sys.argv[1]
-
-    # Valider la date
+    
     try:
         datetime.strptime(date_filter, '%Y-%m-%d')
     except ValueError:

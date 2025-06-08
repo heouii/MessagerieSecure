@@ -11,6 +11,7 @@ use App\Http\Controllers\ProfilController;
 use App\Http\Controllers\ParametreController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\LogController;
+use App\Http\Controllers\Admin\ServerLogController;
 
 
 // Page d'accueil
@@ -53,13 +54,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
     Route::get('dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
 
     Route::get('logs', [LogController::class, 'index'])->name('logs');
-    Route::get('logs/export', [LogController::class, 'export'])->name('logs.export');
+    Route::post('logs/export', [LogController::class, 'export'])->name('logs.export');
+    Route::get('server-logs', [ServerLogController::class, 'index'])->name('server.logs');
+    Route::post('server-logs/download', [ServerLogController::class, 'download'])->name('server.logs.download');
+
 
     Route::get('users', [UserController::class, 'index'])->name('users');
     Route::get('users/{user}', [UserController::class, 'show'])->name('users.show');
     Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::patch('users/{user}/block', [UserController::class, 'block'])->name('users.block');
-    Route::patch('users/{user}/toggle-admin', [UserController::class, 'toggleAdmin'])->name('users.toggleAdmin'); // <-- ici
+    Route::patch('users/{user}/toggle-admin', [UserController::class, 'toggleAdmin'])->name('users.toggleAdmin');
 });
 
 

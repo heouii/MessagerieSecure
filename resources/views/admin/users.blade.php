@@ -4,6 +4,14 @@
 <div class="container mt-4">
     <h1 class="mb-4">Liste des utilisateurs</h1>
 
+    @if(session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+
+    @if(session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
     <div class="mb-3">
         <input type="text" id="searchUser" class="form-control" placeholder="Rechercher un utilisateur...">
     </div>
@@ -17,6 +25,7 @@
                     <th>Téléphone</th>
                     <th>Date d'inscription</th>
                     <th>Statut</th>
+                    <th>Admin</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -44,6 +53,14 @@
                     </td>
 
                     <td>
+                        @if($user->admin)
+                            <span class="badge bg-primary">Admin</span>
+                        @else
+                            <span class="badge bg-secondary">Visiteur</span>
+                        @endif
+                    </td>
+
+                    <td>
                         @if($user->is_blocked)
                             <form method="POST" action="{{ route('admin.users.block', $user->id) }}" style="display:inline;">
                                 @csrf
@@ -62,6 +79,24 @@
                             </a>
                             <a href="{{ route('admin.users.show', $user->id) }}" class="btn btn-sm btn-info">Voir</a>
                         @endif
+
+                        <form method="POST" action="{{ route('admin.users.toggleAdmin', $user->id) }}" style="display:inline;">
+                            @csrf
+                            @method('PATCH')
+                            @if($user->admin)
+                                <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                        onclick="return confirm('Retirer le rôle admin à {{ $user->prenom }} ?')" 
+                                        title="Retirer le rôle admin">
+                                    Retirer admin
+                                </button>
+                            @else
+                                <button type="submit" class="btn btn-sm btn-outline-success" 
+                                        onclick="return confirm('Promouvoir {{ $user->prenom }} en admin ?')" 
+                                        title="Promouvoir en admin">
+                                    Promouvoir admin
+                                </button>
+                            @endif
+                        </form>
                     </td>
                 </tr>
                 @endforeach
@@ -70,7 +105,6 @@
     </div>
 </div>
 
-<!-- Modal blocage -->
 <div class="modal fade" id="blockUserModal" tabindex="-1" aria-labelledby="blockUserModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <form method="POST" id="blockUserForm" action="">
@@ -102,7 +136,7 @@
 </div>
 
 <script>
-    // Filtrer la liste
+    // Filtrer la liste des utilisateurs
     document.getElementById('searchUser').addEventListener('input', function() {
         const search = this.value.toLowerCase();
         const rows = document.querySelectorAll('#userTableBody tr');
@@ -112,7 +146,6 @@
         });
     });
 
-    // Préparer modal blocage
     const blockUserModal = document.getElementById('blockUserModal');
     blockUserModal.addEventListener('show.bs.modal', event => {
         const button = event.relatedTarget;

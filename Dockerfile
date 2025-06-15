@@ -18,16 +18,22 @@ RUN apk update && apk add --no-cache \
 # Installer Composer
 COPY --from=composer:2.5 /usr/bin/composer /usr/bin/composer
 
-# Copier le code et fixer droits
+# Copier le code
 WORKDIR /var/www/html
 COPY . .
-RUN chown -R www-data:www-data storage bootstrap/cache
 
-# Installer toutes les dépendances (inclut Faker en dev)
-RUN composer install --optimize-autoloader \
+# Créer et sécuriser les répertoires de cache et de views compilées
+RUN mkdir -p storage/framework/cache/data storage/framework/views bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 0777 storage bootstrap/cache
+
+# Installer toutes les dépendances PHP (inclut dev : pail, collision) et front
+RUN composer install --optimize-autoloader --prefer-dist --no-interaction \
   && npm install \
   && npm run build
 
 # Exposer le port FPM
 EXPOSE 9000
-CMD ["php-fpm"]
+
+# Lancement de PHP-FPM en ajustant les permissions à chaque démarrage
+CMD ["sh", "-c", "chown -R www-data:www-data storage bootstrap/cache && php-fpm"]

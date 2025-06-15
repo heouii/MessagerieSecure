@@ -6,6 +6,13 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\MessageController;
 use Laravel\Fortify\Features;
 use App\Http\Controllers\Auth\TwoFactorController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ProfilController;
+use App\Http\Controllers\ParametreController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\LogController;
+use App\Http\Controllers\Admin\ServerLogController;
+
 
 // Page d'accueil
 Route::get('/', function () {
@@ -31,10 +38,47 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/messages/drafts', [MessageController::class, 'drafts'])->name('messages.drafts');
     Route::get('/messages/spam', [MessageController::class, 'spam'])->name('messages.spam');
     Route::get('/messages/deleted', [MessageController::class, 'deleted'])->name('messages.deleted');
+    
+    // Afficher les détails d'un message
+    Route::get('/messages/{message}', [MessageController::class, 'show'])->name('messages.show');
 });
 
-//2MFA
+// 2MFA
+Route::get('two-factor', [TwoFactorController::class, 'show'])->name('two-factor.index');
+Route::post('two-factor', [TwoFactorController::class, 'verify'])->name('two-factor.verify');
+
+
+
+//admin
+Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () {
+    Route::get('dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
+
+    Route::get('logs', [LogController::class, 'index'])->name('logs');
+    Route::post('logs/export', [LogController::class, 'export'])->name('logs.export');
+    Route::get('server-logs', [ServerLogController::class, 'index'])->name('server.logs');
+    Route::post('server-logs/download', [ServerLogController::class, 'download'])->name('server.logs.download');
+
+
+    Route::get('users', [UserController::class, 'index'])->name('users');
+    Route::get('users/{user}', [UserController::class, 'show'])->name('users.show');
+    Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+    Route::patch('users/{user}/block', [UserController::class, 'block'])->name('users.block');
+    Route::patch('users/{user}/toggle-admin', [UserController::class, 'toggleAdmin'])->name('users.toggleAdmin');
+});
+
+
+
+
+//profil
 Route::middleware(['auth'])->group(function () {
-    Route::get('two-factor', [TwoFactorController::class, 'show'])->name('two-factor.index');
-    Route::post('two-factor', [TwoFactorController::class, 'verify'])->name('two-factor.verify');
+    Route::get('/profil', [ProfilController::class, 'show'])->name('profil.show');
+    Route::post('/profil', [ProfilController::class, 'update'])->name('profil.update');
+});
+
+//parametre
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/parametres', [ParametreController::class, 'index'])->name('parametres');
+    Route::post('/parametres/delete', [ParametreController::class, 'delete'])->name('parametre.delete');
+    Route::post('/parametres/cancel-deletion', [ParametreController::class, 'cancelDeletion'])->name('parametre.cancelDeletion');
 });

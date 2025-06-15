@@ -1,4 +1,3 @@
-# Utilise PHP 8.2 FPM Alpine
 FROM php:8.2-fpm-alpine
 
 # Variables environnement
@@ -6,13 +5,15 @@ ENV APP_ENV=production \
     COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_NO_INTERACTION=1
 
-# Installer dépendances système et PHP extensions
+# Installer dépendances système et extensions PHP
 RUN apk update && apk add --no-cache \
     bash git curl icu-dev oniguruma-dev \
     libpng-dev libjpeg-turbo-dev libwebp-dev zlib-dev \
+    libxml2-dev \
     nodejs npm build-base \
   && docker-php-ext-configure gd --with-jpeg --with-webp \
-  && docker-php-ext-install pdo pdo_mysql gd mbstring exif intl
+  && docker-php-ext-install \
+    pdo pdo_mysql gd mbstring exif intl xml dom
 
 # Installer Composer
 COPY --from=composer:2.5 /usr/bin/composer /usr/bin/composer

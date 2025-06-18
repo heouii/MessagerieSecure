@@ -5,94 +5,79 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Models\User;
-use PragmaRX\Google2FA\Google2FA;
-use Endroid\QrCode\Builder\Builder;
-use Endroid\QrCode\Writer\PngWriter;
-use Endroid\QrCode\Encoding\Encoding;
-use Endroid\QrCode\ErrorCorrectionLevel\ErrorCorrectionLevelLow;
-
-
+use PragmaRX\Google2FAQRCode\Google2FA;
+use PragmaRX\Google2FALaravel\Support\Authenticator;
 
 class TwoFactorController extends Controller
 {
-    public function show()
-    {
-        $userId = session('2fa:user:id');
 
-        if (!$userId) {
-            return redirect()->route('login');
-        }
+public function index(Request $request)
+{
+    $userId = session('2fa:user:id');
+    $user = \App\Models\User::find($userId);
 
-        // Récupérer l'utilisateur depuis la base de données
-        $user = User::findOrFail($userId);
-        $secret = decrypt($user->two_factor_secret);
-
-        // Initialiser Google2FA
-        $google2fa = new Google2FA();
-
-        // Générer l'URL du QR code (pour scanner avec Google Authenticator)
-        $QRUrl = $google2fa->getQRCodeUrl(
-            config('app.url'), 
-            $user->email,
-            $secret
-        );
-
-        // Créer le QR code avec l'URL générée
-$result = Builder::create()
-    ->writer(new PngWriter())
-    ->data($QRUrl)
-    ->encoding(new Encoding('UTF-8'))
-    ->errorCorrectionLevel(new ErrorCorrectionLevelLow())
-    ->size(300)
-    ->margin(10)
-    ->build();
-
-$qrCodeImage = $result->getDataUri();
-
-
-        // Pour déboguer, enregistrer l'image QR Code en base64 dans les logs
-        \Log::info('QR Code Image Base64: ' . $qrCodeImage);
-
-        // Retourner la vue avec l'image QR Code générée
-        return view('auth.two-factor', compact('qrCodeImage'));
+    if (!$user) {
+        return redirect('/login')->withErrors(['email' => 'Session expirée. Veuillez vous reconnecter.']);
     }
+
+    if (!$user->two_factor_secret) {
+        $google2fa = app('pragmarx.google2fa');
+        $user->two_factor_secret = $google2fa->generateSecretKey();
+        $user->save();
+    }
+
+        $showQr = false;
+$qrCode = null;
+
+// Si l'utilisateur n'a PAS confirmé le 2FA, on affiche le QR code (première activation)
+if (!$user->two_factor_confirmed_at) {
+    $google2fa = app('pragmarx.google2fa');
+    $qrCode = $google2fa->getQRCodeInline(
+        config('app.name'),
+        $user->email,
+        $user->two_factor_secret
+    );
+    $showQr = true;
+}
+
+return view('auth.two-factor', [
+    'qrCode' => $qrCode,
+    'showQr' => $showQr,
+    'user' => $user,
+]);
+
+}
 
     public function verify(Request $request)
     {
-        // Validation du code de vérification
         $request->validate([
-            'code' => 'required|numeric',
+            'code' => 'required|digits:6',
         ]);
 
-        // Récupérer l'utilisateur de la session
         $userId = session('2fa:user:id');
+        $user = \App\Models\User::find($userId);
 
-        if (!$userId) {
-            return redirect()->route('login');
+        if (!$user) {
+            return redirect('/login')->withErrors(['email' => 'Session expirée. Veuillez vous reconnecter.']);
         }
 
-        // Récupérer l'utilisateur depuis la base de données
-        $user = User::findOrFail($userId);
-        $secret = decrypt($user->two_factor_secret);
-        
-        // Initialiser Google2FA
-        $google2fa = new Google2FA();
+        $google2fa = app('pragmarx.google2fa');
 
-        // Vérifier le code de vérification
-        if ($google2fa->verifyKey($secret, $request->code)) {
-            session()->forget('2fa:user:id');  // Supprimer l'utilisateur de la session
-            Auth::login($user);  // Connecter l'utilisateur
+        $isValid = $google2fa->verifyKey($user->two_factor_secret, $request->input('code'));
 
-            // Rediriger vers le tableau de bord ou l'admin en fonction du rôle
+        if ($isValid) {
+            $user->two_factor_confirmed_at = now();
+            $user->save();
+
+            Auth::login($user);
+
+            $request->session()->forget('2fa:user:id');
+
             return $user->admin
-                ? redirect()->intended('/admin')
-                : redirect()->intended('/dashboard');
+                ? redirect()->intended('/admin/dashboard')->with('success', 'Connecté avec 2FA !')
+                : redirect()->intended('/dashboard')->with('success', 'Connecté avec 2FA !');
+        } else {
+            return back()->withErrors(['code' => 'Code 2FA invalide.']);
         }
-
-        // Retourner un message d'erreur si le code est incorrect
-        return back()->withErrors([
-            'code' => 'Le code de vérification est incorrect.',
-        ]);
     }
 }

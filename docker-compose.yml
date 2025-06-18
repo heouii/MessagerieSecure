@@ -10,6 +10,7 @@ services:
       - ./:/var/www/html:cached
       - vendor-data:/var/www/html/vendor
       - ./storage:/var/www/html/storage
+      - /var/log/nginx:/var/log/nginx:ro
     networks:
       - messagerie
 

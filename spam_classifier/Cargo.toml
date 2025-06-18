@@ -1,0 +1,11 @@
+[package]
+name = "spam_classifier"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+csv             = "1.2"
+regex           = "1"
+ndarray         = "0.15"
+linfa           = "0.7.1"
+linfa-logistic  = "0.7.1"

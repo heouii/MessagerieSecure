@@ -5,13 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Fortify\TwoFactorAuthenticatable;
 use PragmaRX\Google2FA\Google2FA;
-use Illuminate\Database\Eloquent\SoftDeletes; 
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, TwoFactorAuthenticatable, SoftDeletes;
+    use HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'prenom',
@@ -19,23 +18,28 @@ class User extends Authenticatable
         'tel',
         'email',
         'password',
-        'is_blocked',        // si tu ajoutes ce champ aussi
-        'blocked_until',     // tu peux aussi le laisser ici
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'two_factor_confirmed_at',
+        'is_blocked',
+        'blocked_until',
     ];
 
     protected $casts = [
         'blocked_until' => 'datetime',
-        'is_blocked' => 'boolean',  // si tu utilises ce champ
+        'is_blocked' => 'boolean',
+        'two_factor_confirmed_at' => 'datetime',
     ];
+
+    public function hasTwoFactorEnabled()
+    {
+        return !is_null($this->two_factor_secret) && !is_null($this->two_factor_confirmed_at);
+    }
 
     public function twoFactorVerify($code)
     {
+        $secret = $this->two_factor_secret;
         $google2fa = new Google2FA();
-
-        // Décrypter la clé secrète 2FA
-        $secret = decrypt($this->two_factor_secret);
-
-        // Vérifier si le code fourni par l'utilisateur est valide
         return $google2fa->verifyKey($secret, $code);
     }
 }

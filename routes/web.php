@@ -12,6 +12,7 @@ use App\Http\Controllers\ParametreController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\LogController;
 use App\Http\Controllers\Admin\ServerLogController;
+use App\Http\Controllers\Admin\AdminConnexionController;
 
 
 // Page d'accueil
@@ -44,8 +45,14 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // 2MFA
-Route::get('two-factor', [TwoFactorController::class, 'show'])->name('two-factor.index');
-Route::post('two-factor', [TwoFactorController::class, 'verify'])->name('two-factor.verify');
+Route::get('/two-factor', [TwoFactorController::class, 'index'])->name('two-factor.index');
+Route::post('/two-factor', [TwoFactorController::class, 'verify'])->name('two-factor.verify');
+
+// Desactiver/Réactiver le MFA
+Route::get('/profil', [ProfilController::class, 'show'])->name('profil.show');
+Route::post('/profil/update', [ProfilController::class, 'update'])->name('profil.update');
+Route::post('/profil/2fa/enable', [ProfilController::class, 'enable2FA'])->name('profil.2fa.enable');
+Route::post('/profil/2fa/disable', [ProfilController::class, 'disable2FA'])->name('profil.2fa.disable');
 
 
 
@@ -64,6 +71,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
     Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::patch('users/{user}/block', [UserController::class, 'block'])->name('users.block');
     Route::patch('users/{user}/toggle-admin', [UserController::class, 'toggleAdmin'])->name('users.toggleAdmin');
+    Route::get('connexions', [AdminConnexionController::class, 'index'])->name('connexions');
+
 });
 
 
@@ -74,6 +83,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/profil', [ProfilController::class, 'show'])->name('profil.show');
     Route::post('/profil', [ProfilController::class, 'update'])->name('profil.update');
 });
+
+// pour les sessions actives
+Route::post('/profil/sessions/{id}/destroy', [ProfilController::class, 'destroySession'])->name('profil.sessions.destroy');
+
+
 
 //parametre
 

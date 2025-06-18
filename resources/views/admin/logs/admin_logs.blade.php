@@ -10,16 +10,6 @@
             <input type="date" name="date" id="date" value="{{ $date }}" class="form-control">
         </div>
 
-        <div class="col-auto">
-            <label for="keyword" class="form-label fw-semibold">Mot-clé :</label>
-            <input type="text" name="keyword" id="keyword" value="{{ request('keyword') }}" placeholder="ex: error, warning" class="form-control">
-        </div>
-
-        <div class="col-auto">
-            <label for="ip" class="form-label fw-semibold">IP :</label>
-            <input type="text" name="ip" id="ip" value="{{ request('ip') }}" placeholder="ex: 192.168.1.1" class="form-control">
-        </div>
-
         <div class="col-auto align-self-end">
             <button type="submit" class="btn btn-primary px-4">Afficher</button>
         </div>

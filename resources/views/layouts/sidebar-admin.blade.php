@@ -32,6 +32,13 @@
                     <i class="fas fa-user me-2"></i> Profil
                 </a>
             </li>
+            <li class="nav-item mb-1">
+                <a href="{{ route('admin.connexions') }}" 
+                class="nav-link {{ request()->routeIs('admin.connexions') ? 'active' : '' }}">
+                    <i class="fas fa-clock me-2"></i> Connexions
+                </a>
+            </li>
+
         </ul>
     </div>
 </nav>

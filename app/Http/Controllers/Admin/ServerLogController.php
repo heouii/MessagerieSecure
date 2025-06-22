@@ -10,47 +10,49 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ServerLogController extends Controller
 {
-public function index(Request $request)
-{
-    $date = $request->input('date', date('Y-m-d'));
-    $logs  = ['access' => [], 'error' => []];
-    $error = null;
+    public function index(Request $request)
+    {
+        $date = $request->input('date', date('Y-m-d'));
+        $ip = $request->input('ip', '');
+        $logs  = ['access' => [], 'error' => []];
+        $error = null;
 
-    // Validation date
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
-        $error = 'Format de date invalide.';
-        return view('admin.logs.admin_logs', compact('logs', 'error', 'date'));
+        // Validation date
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            $error = 'Format de date invalide.';
+            return view('admin.logs.admin_logs', compact('logs', 'error', 'date', 'ip'));
+        }
+
+        $pythonPath = '/usr/bin/python3'; // Chemin absolu OK
+        $scriptPath = '/var/www/html/scripts/read_logs.py';
+
+        foreach (['access', 'error'] as $type) {
+            $cmd = $pythonPath . ' '
+                . escapeshellarg($scriptPath) . ' '
+                . escapeshellarg($type) . ' '
+                . escapeshellarg($date) . ' '
+                . '"" ' // keyword vide
+                . escapeshellarg($ip)
+                . ' 2>&1';
+
+            \Log::debug("CMD: $cmd");
+
+            $output = [];
+            $returnVar = 0;
+            exec($cmd, $output, $returnVar);
+
+            \Log::debug("Return var ($type): $returnVar");
+            \Log::debug("Output index ($type): " . print_r($output, true));
+
+            if ($returnVar !== 0) {
+                $error = "Erreur lors de la lecture du log $type : " . implode("\n", $output);
+            } else {
+                $logs[$type] = $output;
+            }
+        }
+
+        return view('admin.logs.admin_logs', compact('logs', 'error', 'date', 'ip'));
     }
-
-$pythonPath = '/usr/bin/python3'; // Chemin absolu OK
-$scriptPath = '/var/www/html/scripts/read_logs.py';
-
-foreach (['access', 'error'] as $type) {
-    $cmd = $pythonPath . ' '
-        . escapeshellarg($scriptPath) . ' '
-        . escapeshellarg($type) . ' '
-        . escapeshellarg($date)
-        . ' 2>&1';
-
-    \Log::debug("CMD: $cmd");
-
-    $output = [];
-    $returnVar = 0;
-    exec($cmd, $output, $returnVar);
-
-    \Log::debug("Return var ($type): $returnVar");
-    \Log::debug("Output index ($type): " . print_r($output, true));
-
-    if ($returnVar !== 0) {
-        $error = "Erreur lors de la lecture du log $type : " . implode("\n", $output);
-    } else {
-        $logs[$type] = $output;
-    }
-}
-
-
-    return view('admin.logs.admin_logs', compact('logs', 'error', 'date'));
-}
 
 
     public function download(Request $request)
@@ -58,7 +60,8 @@ foreach (['access', 'error'] as $type) {
         $request->validate([
             'password' => 'required',
             'date'     => 'required|date_format:Y-m-d',
-            // 'type'  => 'required|in:access,error', // à activer si tu veux choisir le type
+            //'type'  => 'required|in:access,error',
+            'ip'       => 'nullable|ip',
         ]);
 
         if (!Hash::check($request->input('password'), Auth::user()->password)) {
@@ -66,7 +69,8 @@ foreach (['access', 'error'] as $type) {
         }
 
         $date = $request->input('date');
-        $type = 'access'; // ou récupérer $request->input('type', 'access')
+        $type = 'access';
+        $ip = $request->input('ip', '');
 
         $pythonPath = trim(shell_exec('which python3'));
         if (!$pythonPath) $pythonPath = '/usr/bin/python3';
@@ -75,8 +79,10 @@ foreach (['access', 'error'] as $type) {
         $cmd = $pythonPath . ' '
              . escapeshellarg($scriptPath) . ' '
              . escapeshellarg($type) . ' '
-             . escapeshellarg($date)
-             . ' 2>&1';
+             . escapeshellarg($date) . ' '
+             . '"" ' // keyword vide
+             . escapeshellarg($ip) . ' '
+             . 'csv 2>&1';
 
         $output = [];
         $returnVar = 0;
@@ -86,7 +92,7 @@ foreach (['access', 'error'] as $type) {
             return back()->withErrors(['error' => "Erreur lors de la lecture du log $type : " . implode("\n", $output)]);
         }
 
-        $filename = "{$type}_log_{$date}.txt";
+        $filename = "{$type}_log_{$date}.csv";
 
         return new StreamedResponse(function () use ($output) {
             $handle = fopen('php://output', 'w');
@@ -95,7 +101,7 @@ foreach (['access', 'error'] as $type) {
             }
             fclose($handle);
         }, 200, [
-            'Content-Type'        => 'text/plain',
+            'Content-Type'        => 'text/csv',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
     }

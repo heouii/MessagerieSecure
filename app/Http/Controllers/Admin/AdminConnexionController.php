@@ -9,7 +9,6 @@ class AdminConnexionController extends Controller
 {
     public function index()
     {
-        // On joint avec users pour le nom/email
         $connexions = DB::table('sessions')
             ->leftJoin('users', 'sessions.user_id', '=', 'users.id')
             ->select(

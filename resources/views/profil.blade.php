@@ -18,8 +18,14 @@
                     @if(session('password_success'))
                         <div class="alert alert-success">{{ session('password_success') }}</div>
                     @endif
+                    @if(session('security_error'))
+                        <div class="alert alert-danger">{{ session('security_error') }}</div>
+                    @endif
+                    @if(session('security_success'))
+                        <div class="alert alert-success">{{ session('security_success') }}</div>
+                    @endif
 
-                    <form action="{{ route('profil.update') }}" method="POST">
+                    <form id="profilForm" action="{{ route('profil.update') }}" method="POST">
                         @csrf
                         <div class="mb-3">
                             <label for="prenom" class="form-label">Prénom</label>
@@ -33,6 +39,7 @@
                             <label for="tel" class="form-label">Téléphone</label>
                             <input type="tel" class="form-control" id="tel" name="tel" value="{{ old('tel', $user->tel) }}" required pattern="\d{10}" title="Le numéro de téléphone doit être composé de 10 chiffres" style="border-radius: 8px;">
                         </div>
+
                         <hr class="my-4">
                         <h5 class="mb-3">Changer le mot de passe</h5>
                         <div class="mb-3">
@@ -47,8 +54,54 @@
                             <label for="new_password_confirmation" class="form-label">Confirmer le nouveau mot de passe</label>
                             <input type="password" class="form-control" id="new_password_confirmation" name="new_password_confirmation" autocomplete="new-password" style="border-radius: 8px;">
                         </div>
-                        <button type="submit" class="btn" style="background-color: #BAA8D3; color: white; border-radius: 8px; width: 100%;">Mettre à jour</button>
+
+                        <hr class="my-4">
+                        <h5>Question de sécurité</h5>
+                        <div class="mb-3">
+                            <label for="security_question" class="form-label">Choisissez votre question de sécurité</label>
+                            <select name="security_question" id="security_question" class="form-control" required>
+                                <option value="">-- Choisissez une question --</option>
+                                <option value="Quel est le nom de votre premier animal ?" {{ old('security_question', $user->security_question) == 'Quel est le nom de votre premier animal ?' ? 'selected' : '' }}>Quel est le nom de votre premier animal ?</option>
+                                <option value="Quel est le nom de jeune fille de votre mère ?" {{ old('security_question', $user->security_question) == 'Quel est le nom de jeune fille de votre mère ?' ? 'selected' : '' }}>Quel est le nom de jeune fille de votre mère ?</option>
+                                <option value="Dans quelle ville êtes-vous né ?" {{ old('security_question', $user->security_question) == 'Dans quelle ville êtes-vous né ?' ? 'selected' : '' }}>Dans quelle ville êtes-vous né ?</option>
+                                <option value="Quel était votre surnom d’enfance ?" {{ old('security_question', $user->security_question) == 'Quel était votre surnom d’enfance ?' ? 'selected' : '' }}>Quel était votre surnom d’enfance ?</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="security_answer" class="form-label">Votre réponse</label>
+                            <input type="text" name="security_answer" id="security_answer" class="form-control" autocomplete="off" placeholder="Laisser vide pour ne pas changer">
+                            <small class="form-text text-muted">Seule la dernière réponse sera conservée.</small>
+                        </div>
+
+                        <!-- Bouton spécial pour question secrète -->
+                        <button type="button" id="openSecurityModal" class="btn" style="background-color: #BAA8D3; color: white; border-radius: 8px; width: 100%;">
+                            Mettre à jour
+                        </button>
+                        <button type="submit" id="realSecuritySubmit" class="d-none"></button>
+
                     </form>
+
+                    <!-- MODAL MOT DE PASSE (Bootstrap 5 requis) -->
+                    <div class="modal fade" id="securityPasswordModal" tabindex="-1" aria-labelledby="securityPasswordModalLabel" aria-hidden="true">
+                      <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                          <div class="modal-header">
+                            <h5 class="modal-title" id="securityPasswordModalLabel">Valider avec votre mot de passe</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                          </div>
+                          <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="security_password_modal" class="form-label">Mot de passe</label>
+                                <input type="password" name="security_password_modal" id="security_password_modal" class="form-control" required autocomplete="off">
+                            </div>
+                          </div>
+                          <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                            <button type="button" class="btn btn-primary" id="submitSecurityFormBtn">Valider</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
 
                     @if($sessions->count() > 0)
                         <hr class="my-4">
@@ -83,31 +136,41 @@
                             </tbody>
                         </table>
                     @endif
-
-                    <hr class="my-4">
-                    <h5 class="mb-3">Authentification à deux facteurs (2FA)</h5>
-                    @if($user->hasTwoFactorEnabled())
-                        <form method="POST" action="{{ route('profil.2fa.disable') }}">
-                            @csrf
-                            <div class="mb-2">
-                                <label for="password_2fa" class="form-label">Mot de passe actuel pour désactiver le 2FA :</label>
-                                <input type="password" name="password_2fa" class="form-control" required>
-                            </div>
-                            <button type="submit" class="btn" style="background-color: #BAA8D3; color: white; border-radius: 8px; width: 100%;">Désactiver le 2FA</button>
-                        </form>
-                    @else
-                        <form method="POST" action="{{ route('profil.2fa.enable') }}">
-                            @csrf
-                            <div class="mb-2">
-                                <label for="password_2fa" class="form-label">Mot de passe actuel pour activer le 2FA :</label>
-                                <input type="password" name="password_2fa" class="form-control" required>
-                            </div>
-                            <button type="submit" class="btn" style="background-color: #BAA8D3; color: white; border-radius: 8px; width: 100%;">Activer le 2FA</button>
-                        </form>
-                    @endif
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Script Modal/Submit JS -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const openModalBtn = document.getElementById('openSecurityModal');
+    const submitModalBtn = document.getElementById('submitSecurityFormBtn');
+    const realSubmitBtn = document.getElementById('realSecuritySubmit');
+    const securityPasswordInput = document.getElementById('security_password_modal');
+
+    // Empêche le submit natif du bouton spécial
+    openModalBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var myModal = new bootstrap.Modal(document.getElementById('securityPasswordModal'));
+        myModal.show();
+    });
+
+    submitModalBtn.addEventListener('click', function () {
+        let form = openModalBtn.closest('form');
+        let existing = document.getElementById('security_password');
+        if(!existing) {
+            let hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'security_password';
+            hidden.id = 'security_password';
+            form.appendChild(hidden);
+            existing = hidden;
+        }
+        existing.value = securityPasswordInput.value;
+        realSubmitBtn.click();
+    });
+});
+</script>
 @endsection

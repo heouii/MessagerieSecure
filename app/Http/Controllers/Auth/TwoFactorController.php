@@ -80,4 +80,34 @@ return view('auth.two-factor', [
             return back()->withErrors(['code' => 'Code 2FA invalide.']);
         }
     }
+
+    public function reset(Request $request)
+{
+    $userId = session('2fa:user:id');
+    $user = \App\Models\User::find($userId);
+
+    if (!$user) {
+        return redirect('/login')->withErrors(['email' => 'Session expirée. Veuillez vous reconnecter.']);
+    }
+
+    $request->validate([
+        'security_answer' => 'required|string',
+    ]);
+
+    if (!$user->security_question || !$user->security_answer) {
+        return back()->with('reset2fa_error', 'Aucune question de sécurité n\'est enregistrée sur ce compte.');
+    }
+
+    if (!\Hash::check($request->input('security_answer'), $user->security_answer)) {
+        return back()->with('reset2fa_error', 'Réponse à la question de sécurité incorrecte.');
+    }
+
+    $google2fa = app('pragmarx.google2fa');
+    $user->two_factor_secret = $google2fa->generateSecretKey();
+    $user->two_factor_confirmed_at = null;
+    $user->save();
+
+    return back()->with('reset2fa_success', 'MFA réinitialisé. Veuillez scanner le nouveau QR code.');
+}
+
 }

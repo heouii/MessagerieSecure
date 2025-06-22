@@ -2,12 +2,17 @@
 
 @section('content')
 <div class="container py-5">
-    <h2 class="mb-4 fw-bold text-primary"style="color: #BAA8D3;">Logs serveur</h2>
+    <h2 class="mb-4 fw-bold text-primary" style="color: #BAA8D3;">Logs serveur</h2>
 
     <form method="GET" class="row g-3 align-items-center mb-4">
         <div class="col-auto">
             <label for="date" class="form-label fw-semibold">Date :</label>
             <input type="date" name="date" id="date" value="{{ $date }}" class="form-control">
+        </div>
+
+        <div class="col-auto">
+            <label for="ip" class="form-label fw-semibold">Filtrer par IP :</label>
+            <input type="text" name="ip" id="ip" value="{{ request('ip') }}" placeholder="Adresse IP" class="form-control">
         </div>
 
         <div class="col-auto align-self-end">

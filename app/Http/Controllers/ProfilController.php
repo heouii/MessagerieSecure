@@ -6,8 +6,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use PragmaRX\Google2FA\Google2FA;
 
 class ProfilController extends Controller
 {
@@ -24,20 +22,56 @@ class ProfilController extends Controller
 
     public function update(Request $request)
     {
-        $validatedData = $request->validate([
+        $user = Auth::user();
+
+        // Mise à jour des infos de base avec les mêmes règles que RegisterController
+        $request->validate([
             'prenom' => 'required|string|max:255',
-            'nom' => 'required|string|max:255',
-            'tel' => 'required|numeric|digits:10',
-            // 'email' => 'required|email|max:255|unique:users,email,' . Auth::id(), // décommente si tu veux éditer l'email
+            'nom'   => 'required|string|max:255',
+            'tel'   => 'required|numeric|digits:10',
+        ], [
+            'tel.numeric' => 'Le numéro de téléphone doit contenir uniquement des chiffres.',
+            'tel.digits'  => 'Le numéro de téléphone doit contenir exactement 10 chiffres.',
         ]);
 
-        $user = Auth::user();
-        $user->update($validatedData);
+        $user->prenom = $request->input('prenom');
+        $user->nom    = $request->input('nom');
+        $user->tel    = $request->input('tel');
 
-        if ($request->filled('current_password') || $request->filled('new_password') || $request->filled('new_password_confirmation')) {
+        // Gestion de la question secrète (MAJ SEULEMENT SI une réponse est saisie)
+        if ($request->filled('security_answer')) {
+            if (!$request->filled('security_password') || !Hash::check($request->security_password, $user->password)) {
+                return redirect()->route('profil.show')->with('security_error', 'Mot de passe incorrect pour changer la question secrète.');
+            }
+            if ($request->filled('security_question')) {
+                $user->security_question = $request->input('security_question');
+            }
+            $user->security_answer = bcrypt($request->input('security_answer'));
+            session()->flash('security_success', 'Question de sécurité mise à jour.');
+        }
+
+        // Gestion du mot de passe avec les mêmes règles que RegisterController
+        if (
+            $request->filled('current_password') ||
+            $request->filled('new_password') ||
+            $request->filled('new_password_confirmation')
+        ) {
             $request->validate([
                 'current_password' => 'required',
-                'new_password' => 'required|string|min:8|confirmed',
+                'new_password' => [
+                    'required',
+                    'string',
+                    'min:10',
+                    'confirmed',
+                    'regex:/[A-Z]/',        
+                    'regex:/[a-z]/',         
+                    'regex:/[0-9]/',        
+                    'regex:/[@$!%*#?&.]/',
+                ],
+            ], [
+                'new_password.min' => 'Le mot de passe doit contenir au moins 10 caractères.',
+                'new_password.regex' => 'Le mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un caractère spécial.',
+                'new_password.confirmed' => 'La confirmation du mot de passe ne correspond pas.',
             ]);
 
             if (!Hash::check($request->input('current_password'), $user->password)) {
@@ -46,51 +80,11 @@ class ProfilController extends Controller
 
             $user->password = Hash::make($request->input('new_password'));
             $user->save();
-
             return redirect()->route('profil.show')->with('password_success', 'Mot de passe modifié avec succès !');
         }
 
+        $user->save();
+
         return redirect()->route('profil.show')->with('success', 'Profil mis à jour avec succès!');
-    }
-
-    public function destroySession(Request $request, $id)
-    {
-        DB::table('sessions')->where('id', $id)->delete();
-        return back()->with('success', 'Session déconnectée.');
-    }
-
-    public function enable2FA(Request $request)
-    {
-        $request->validate(['password_2fa' => 'required']);
-        $user = Auth::user();
-
-        if (!Hash::check($request->password_2fa, $user->password)) {
-            return back()->with('password_error', 'Mot de passe incorrect.');
-        }
-
-        if (!$user->two_factor_secret) {
-            $google2fa = new Google2FA();
-            $user->two_factor_secret = $google2fa->generateSecretKey();
-        }
-        $user->two_factor_confirmed_at = now();
-        $user->save();
-
-        return back()->with('success', '2FA activé !');
-    }
-
-    public function disable2FA(Request $request)
-    {
-        $request->validate(['password_2fa' => 'required']);
-        $user = Auth::user();
-
-        if (!Hash::check($request->password_2fa, $user->password)) {
-            return back()->with('password_error', 'Mot de passe incorrect.');
-        }
-
-        $user->two_factor_secret = null;
-        $user->two_factor_confirmed_at = null;
-        $user->save();
-
-        return back()->with('success', '2FA désactivé.');
     }
 }

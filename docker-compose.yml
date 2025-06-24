@@ -46,6 +46,19 @@ services:
     networks:
       - messagerie
 
+  spam:
+    build:
+      context: ./spam_classifier
+      dockerfile: Dockerfile   
+    container_name: spam_classifier
+    restart: unless-stopped
+    volumes:
+      - ./data:/data       
+    ports:
+      - "8081:8081"        
+    networks:
+      - messagerie
+
 networks:
   messagerie:
     driver: bridge

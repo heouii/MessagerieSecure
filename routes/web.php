@@ -82,3 +82,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/parametres/delete', [ParametreController::class, 'delete'])->name('parametre.delete');
     Route::post('/parametres/cancel-deletion', [ParametreController::class, 'cancelDeletion'])->name('parametre.cancelDeletion');
 });
+
+// Contact
+use App\Http\Controllers\MailController;
+use Illuminate\Support\Facades\Route;
+Route::get('/contact', [MailController::class, 'showForm'])->name('contact.form');
+Route::post('/contact', [MailController::class, 'sendMail'])->name('contact.send');

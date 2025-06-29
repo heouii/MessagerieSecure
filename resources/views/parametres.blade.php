@@ -10,14 +10,12 @@
                 </div>
 
                 <div class="card-body" style="background-color: #f9f9f9;">
-                    <!-- Afficher un message de succès s'il y en a -->
                     @if(session('success'))
                         <div class="alert alert-success">
                             {{ session('success') }}
                         </div>
                     @endif
 
-                    <!-- Afficher un message d'erreur s'il y en a -->
                     @if($errors->any())
                         <div class="alert alert-danger">
                             @foreach($errors->all() as $error)
@@ -26,17 +24,15 @@
                         </div>
                     @endif
 
-                    <!-- RGPD Section -->
                     <div class="mb-4">
                         <h5>Règlement Général sur la Protection des Données (RGPD)</h5>
                         <p>Conformément au RGPD, vous avez le droit d'accéder, de modifier ou de supprimer vos données personnelles. Nous nous engageons à protéger vos informations et à respecter votre vie privée.</p>
                         <p>Pour en savoir plus sur notre politique de confidentialité, veuillez consulter notre <a href="#">politique de confidentialité</a>.</p>
                     </div>
 
-                    <!-- Suppression de compte -->
                     <div class="mb-4">
                         <h5>Supprimer mon compte</h5>
-                        <p>Si vous souhaitez supprimer définitivement votre compte, toutes vos données seront effacées de notre système. Cette action est irréversible. Cependant, vous avez 30 jours pour annuler cette suppression.</p>
+                        <p>Si vous souhaitez supprimer définitivement votre compte, toutes vos données seront effacées de notre système. Cette action est irréversible.</p>
 
                         <form action="{{ route('parametre.delete') }}" method="POST">
                             @csrf
@@ -53,7 +49,6 @@
                         </form>
                     </div>
 
-                    <!-- Annuler la suppression -->
                     @if(Auth::user()->deleted_at)
                         <div class="mb-4">
                             <h5>Annuler la suppression de mon compte</h5>

@@ -38,7 +38,6 @@
                     <i class="fas fa-clock me-2"></i> Connexions
                 </a>
             </li>
-            {{-- Ajout Blacklist --}}
             <li class="nav-item mb-1">
                 <a href="{{ route('admin.blacklists.index') }}" 
                    class="nav-link {{ request()->routeIs('admin.blacklists.*') ? 'active' : '' }}">

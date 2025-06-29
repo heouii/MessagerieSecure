@@ -85,6 +85,6 @@ Route::middleware(['auth'])->group(function () {
 
 // Contact
 use App\Http\Controllers\MailController;
-use Illuminate\Support\Facades\Route;
+
 Route::get('/contact', [MailController::class, 'showForm'])->name('contact.form');
 Route::post('/contact', [MailController::class, 'sendMail'])->name('contact.send');

@@ -13,75 +13,86 @@ class ServerLogController extends Controller
     public function index(Request $request)
     {
         $date = $request->input('date', date('Y-m-d'));
-
-        $logs  = ['access' => []];
+        $ip = $request->input('ip', '');
+        $logs  = ['access' => [], 'error' => []];
         $error = null;
 
+        // Validation date
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             $error = 'Format de date invalide.';
-            return view('admin.logs.admin_logs', compact('logs', 'error', 'date'));
+            return view('admin.logs.admin_logs', compact('logs', 'error', 'date', 'ip'));
         }
 
-        $pythonPath = '/usr/bin/python3';
-        $scriptPath = base_path('scripts/read_logs.py');
+        $pythonPath = '/usr/bin/python3'; // Chemin absolu OK
+        $scriptPath = '/var/www/html/scripts/read_logs.py';
 
-        // Commande avec chemin absolu python3
-        $cmd = $pythonPath . ' ' 
-             . escapeshellarg($scriptPath) . ' ' 
-             . escapeshellarg('access') . ' ' 
-             . escapeshellarg($date) 
-             . ' 2>&1';
+        foreach (['access', 'error'] as $type) {
+            $cmd = $pythonPath . ' '
+                . escapeshellarg($scriptPath) . ' '
+                . escapeshellarg($type) . ' '
+                . escapeshellarg($date) . ' '
+                . '"" ' // keyword vide
+                . escapeshellarg($ip)
+                . ' 2>&1';
 
-        \Log::debug("Commande index: $cmd");
+            \Log::debug("CMD: $cmd");
 
-        exec($cmd, $output, $returnVar);
+            $output = [];
+            $returnVar = 0;
+            exec($cmd, $output, $returnVar);
 
-        \Log::debug("Return var: $returnVar");
-        \Log::debug("Output index: " . print_r($output, true));
+            \Log::debug("Return var ($type): $returnVar");
+            \Log::debug("Output index ($type): " . print_r($output, true));
 
-        if ($returnVar !== 0) {
-            $error = "Erreur lors de la lecture du log access : " . implode("\n", $output);
-        } else {
-            $logs['access'] = $output;
+            if ($returnVar !== 0) {
+                $error = "Erreur lors de la lecture du log $type : " . implode("\n", $output);
+            } else {
+                $logs[$type] = $output;
+            }
         }
 
-        return view('admin.logs.admin_logs', compact('logs', 'error', 'date'));
+        return view('admin.logs.admin_logs', compact('logs', 'error', 'date', 'ip'));
     }
+
 
     public function download(Request $request)
     {
         $request->validate([
             'password' => 'required',
             'date'     => 'required|date_format:Y-m-d',
+            //'type'  => 'required|in:access,error',
+            'ip'       => 'nullable|ip',
         ]);
 
-        if (! Hash::check($request->input('password'), Auth::user()->password)) {
+        if (!Hash::check($request->input('password'), Auth::user()->password)) {
             return back()->withErrors(['password' => 'Mot de passe incorrect.']);
         }
 
         $date = $request->input('date');
+        $type = 'access';
+        $ip = $request->input('ip', '');
 
-        $pythonPath = '/usr/bin/python3';
+        $pythonPath = trim(shell_exec('which python3'));
+        if (!$pythonPath) $pythonPath = '/usr/bin/python3';
         $scriptPath = base_path('scripts/read_logs.py');
 
-        $cmd = $pythonPath . ' ' 
-             . escapeshellarg($scriptPath) . ' ' 
-             . escapeshellarg('access') . ' ' 
-             . escapeshellarg($date) 
-             . ' 2>&1';
+        $cmd = $pythonPath . ' '
+             . escapeshellarg($scriptPath) . ' '
+             . escapeshellarg($type) . ' '
+             . escapeshellarg($date) . ' '
+             . '"" ' // keyword vide
+             . escapeshellarg($ip) . ' '
+             . 'csv 2>&1';
 
-        \Log::debug("Commande download: $cmd");
-
+        $output = [];
+        $returnVar = 0;
         exec($cmd, $output, $returnVar);
 
-        \Log::debug("Return var download: $returnVar");
-        \Log::debug("Output download: " . print_r($output, true));
-
         if ($returnVar !== 0) {
-            return back()->withErrors(['error' => "Erreur lors de la lecture du log access : " . implode("\n", $output)]);
+            return back()->withErrors(['error' => "Erreur lors de la lecture du log $type : " . implode("\n", $output)]);
         }
 
-        $filename = "access_log_{$date}.txt";
+        $filename = "{$type}_log_{$date}.csv";
 
         return new StreamedResponse(function () use ($output) {
             $handle = fopen('php://output', 'w');
@@ -90,7 +101,7 @@ class ServerLogController extends Controller
             }
             fclose($handle);
         }, 200, [
-            'Content-Type'        => 'text/plain',
+            'Content-Type'        => 'text/csv',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
     }

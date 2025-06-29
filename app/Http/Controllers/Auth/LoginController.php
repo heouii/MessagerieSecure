@@ -14,7 +14,7 @@ class LoginController extends Controller
         return view('auth.login');
     }
 
-    public function login(Request $request)
+public function login(Request $request)
 {
     $request->validate([
         'email' => 'required|email',
@@ -23,32 +23,40 @@ class LoginController extends Controller
 
     $credentials = $request->only('email', 'password');
 
-    // Tentative de connexion de l'utilisateur
     if (Auth::attempt($credentials)) {
         $user = Auth::user();
 
-        // Vérifier si l'utilisateur a une clé 2FA (obligatoire)
-        if ($user->two_factor_secret) {
-            // Stocker l'ID de l'utilisateur dans la session pour la vérification 2FA
+        if ($user->is_blocked) {
+            if ($user->blocked_until && now()->greaterThan($user->blocked_until)) {
+                $user->is_blocked = false;
+                $user->blocked_until = null;
+                $user->save();
+            } else {
+                Auth::logout();
+                return back()->withErrors([
+                    'email' => 'Votre compte est bloqué' . 
+                        ($user->blocked_until ? ' jusqu\'au ' . $user->blocked_until->format('d/m/Y H:i') . '.' : ' indéfiniment.'),
+                ]);
+            }
+        }
+
+        // 2FA
+        if (is_null($user->two_factor_secret) || is_null($user->two_factor_confirmed_at)) {
             session(['2fa:user:id' => $user->id]);
-
-            // Déconnexion de l'utilisateur après la connexion initiale
             Auth::logout();
-
-            // Redirection vers la page de 2FA pour scanner le QR code
             return redirect()->route('two-factor.index');
         }
 
-        return $user->admin
-        ? redirect()->intended('/admin/dashboard')
-        : redirect()->intended('/dashboard');
-
+        session(['2fa:user:id' => $user->id]);
+        Auth::logout();
+        return redirect()->route('two-factor.index');
     }
 
     return back()->withErrors([
         'email' => 'Les informations de connexion sont incorrectes.',
     ]);
 }
+
 
 
     public function logout()

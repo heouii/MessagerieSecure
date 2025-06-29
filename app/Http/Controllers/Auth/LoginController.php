@@ -26,6 +26,21 @@ public function login(Request $request)
     if (Auth::attempt($credentials)) {
         $user = Auth::user();
 
+        if ($user->is_blocked) {
+            if ($user->blocked_until && now()->greaterThan($user->blocked_until)) {
+                $user->is_blocked = false;
+                $user->blocked_until = null;
+                $user->save();
+            } else {
+                Auth::logout();
+                return back()->withErrors([
+                    'email' => 'Votre compte est bloqué' . 
+                        ($user->blocked_until ? ' jusqu\'au ' . $user->blocked_until->format('d/m/Y H:i') . '.' : ' indéfiniment.'),
+                ]);
+            }
+        }
+
+        // 2FA
         if (is_null($user->two_factor_secret) || is_null($user->two_factor_confirmed_at)) {
             session(['2fa:user:id' => $user->id]);
             Auth::logout();
@@ -41,6 +56,7 @@ public function login(Request $request)
         'email' => 'Les informations de connexion sont incorrectes.',
     ]);
 }
+
 
 
     public function logout()

@@ -73,7 +73,6 @@
                             <small class="form-text text-muted">Seule la dernière réponse sera conservée.</small>
                         </div>
 
-                        <!-- Bouton spécial pour question secrète -->
                         <button type="button" id="openSecurityModal" class="btn" style="background-color: #BAA8D3; color: white; border-radius: 8px; width: 100%;">
                             Mettre à jour
                         </button>
@@ -81,7 +80,6 @@
 
                     </form>
 
-                    <!-- MODAL MOT DE PASSE (Bootstrap 5 requis) -->
                     <div class="modal fade" id="securityPasswordModal" tabindex="-1" aria-labelledby="securityPasswordModalLabel" aria-hidden="true">
                       <div class="modal-dialog modal-dialog-centered">
                         <div class="modal-content">
@@ -142,7 +140,6 @@
     </div>
 </div>
 
-<!-- Script Modal/Submit JS -->
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const openModalBtn = document.getElementById('openSecurityModal');
@@ -150,7 +147,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const realSubmitBtn = document.getElementById('realSecuritySubmit');
     const securityPasswordInput = document.getElementById('security_password_modal');
 
-    // Empêche le submit natif du bouton spécial
     openModalBtn.addEventListener('click', function (e) {
         e.preventDefault();
         var myModal = new bootstrap.Modal(document.getElementById('securityPasswordModal'));

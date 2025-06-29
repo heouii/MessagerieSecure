@@ -84,7 +84,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
     Route::patch('users/{user}/toggle-admin', [UserController::class, 'toggleAdmin'])->name('users.toggleAdmin');
     Route::get('connexions', [AdminConnexionController::class, 'index'])->name('connexions');
     
-//black/white list
+//black list
     Route::resource('blacklists', BlacklistController::class)->names([
         'index' => 'blacklists.index',
         'create' => 'blacklists.create',
@@ -92,15 +92,6 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
         'edit' => 'blacklists.edit',
         'update' => 'blacklists.update',
         'destroy' => 'blacklists.destroy',
-    ]);
-
-    Route::resource('whitelists', WhitelistController::class)->names([
-        'index' => 'whitelists.index',
-        'create' => 'whitelists.create',
-        'store' => 'whitelists.store',
-        'edit' => 'whitelists.edit',
-        'update' => 'whitelists.update',
-        'destroy' => 'whitelists.destroy',
     ]);
 });
 

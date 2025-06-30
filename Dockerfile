@@ -32,6 +32,9 @@ RUN composer install --optimize-autoloader --prefer-dist --no-interaction \
   && npm install \
   && npm run build
 
+  # Installer symfony/mailgun-mailer
+RUN composer require symfony/mailgun-mailer
+
 # Exposer le port FPM
 EXPOSE 9000
 

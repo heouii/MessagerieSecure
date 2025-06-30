@@ -25,7 +25,7 @@ COPY . .
 # Créer et sécuriser les répertoires de cache et de views compilées
 RUN mkdir -p storage/framework/cache/data storage/framework/views bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache \
-    && chmod -R 0777 storage bootstrap/cache
+    && chmod -R 775 storage bootstrap/cache
 
 # Installer toutes les dépendances PHP (inclut dev : pail, collision) et front
 RUN composer install --optimize-autoloader --prefer-dist --no-interaction \

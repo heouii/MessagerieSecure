@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\AdminConnexionController;
 use App\Http\Controllers\Admin\BlacklistController;
 use App\Http\Controllers\Admin\WhitelistController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
+use App\Http\Controllers\MailController;
 
 
 // Page d'accueil
@@ -118,7 +119,14 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // Contact
-use App\Http\Controllers\MailController;
+
 
 Route::get('/contact', [MailController::class, 'showForm'])->name('contact.form');
 Route::post('/contact', [MailController::class, 'sendMail'])->name('contact.send');
+
+// Vérification de l'existence de l'email
+
+Route::get('/check-email-exists', function (\Illuminate\Http\Request $request) {
+    $exists = \App\Models\User::where('email', $request->query('email'))->exists();
+    return response()->json($exists);
+});

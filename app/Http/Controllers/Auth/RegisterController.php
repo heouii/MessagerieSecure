@@ -16,6 +16,18 @@ class RegisterController extends Controller
         return view('auth.register');
     }
 
+    protected function generateUniqueEmail($prenom, $nom)
+    {
+        $base = strtolower($prenom . '.' . $nom . '@missive-si.fr');
+        $email = $base;
+        $i = 2;
+        while (User::where('email', $email)->exists()) {
+            $email = strtolower($prenom . '.' . $nom . $i . '@missive-si.fr');
+            $i++;
+        }
+        return $email;
+    }
+
     public function register(Request $request)
     {
         $validatedData = $request->validate([
@@ -29,9 +41,9 @@ class RegisterController extends Controller
                 'string',
                 'min:10',
                 'confirmed',
-                'regex:/[A-Z]/',        
-                'regex:/[a-z]/',         
-                'regex:/[0-9]/',        
+                'regex:/[A-Z]/',
+                'regex:/[a-z]/',
+                'regex:/[0-9]/',
                 'regex:/[@$!%*#?&.]/',
             ],
         ], [
@@ -42,7 +54,7 @@ class RegisterController extends Controller
             'password.confirmed' => 'La confirmation du mot de passe ne correspond pas.',
         ]);
 
-        $email = strtolower($validatedData['prenom'] . '.' . $validatedData['nom'] . '@missive-si.fr');
+        $email = $this->generateUniqueEmail($validatedData['prenom'], $validatedData['nom']);
 
         $user = User::create([
             'prenom' => $validatedData['prenom'],
@@ -56,7 +68,7 @@ class RegisterController extends Controller
 
         $google2fa = new Google2FA();
         $secret = $google2fa->generateSecretKey();
-        $user->two_factor_secret = encrypt($secret);
+        $user->two_factor_secret = $secret;
         $user->save();
 
         Auth::login($user);

@@ -25,12 +25,12 @@
                         <div class="mb-3">
                             <label for="prenom" class="form-label fw-bold" style="color:#695F76;">Prénom</label>
                             <input type="text" name="prenom" id="prenom" class="form-control form-control-lg rounded-3"
-                                   value="{{ old('prenom') }}" required>
+                                   value="{{ old('prenom') }}" required autocomplete="off">
                         </div>
                         <div class="mb-3">
                             <label for="nom" class="form-label fw-bold" style="color:#695F76;">Nom</label>
                             <input type="text" name="nom" id="nom" class="form-control form-control-lg rounded-3"
-                                   value="{{ old('nom') }}" required>
+                                   value="{{ old('nom') }}" required autocomplete="off">
                         </div>
                         <div class="mb-3">
                             <label for="tel" class="form-label fw-bold" style="color:#695F76;">Téléphone</label>
@@ -38,7 +38,12 @@
                                    value="{{ old('tel') }}" required pattern="\d{10}" placeholder="0600000000">
                         </div>
 
-                        {{-- Question secrète --}}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold" style="color:#695F76;">Votre adresse email</label>
+                            <input type="text" id="email_preview" class="form-control form-control-lg rounded-3 bg-light" value="" readonly tabindex="-1" style="color:#9280A3;">
+                            <div id="email_exists" class="text-danger mt-1" style="display:none;font-size:1rem;"></div>
+                        </div>
+
                         <div class="mb-3">
                             <label for="security_question" class="form-label fw-bold" style="color:#695F76;">
                                 Question de sécurité
@@ -91,4 +96,43 @@
         </div>
     </div>
 </div>
+
+<script>
+    function sanitize(str) {
+        return str.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    }
+
+    async function updateEmailPreview() {
+        let prenom = document.getElementById('prenom').value;
+        let nom = document.getElementById('nom').value;
+        let base = sanitize(prenom) + '.' + sanitize(nom);
+        let email = base + '@missive-si.fr';
+        let emailField = document.getElementById('email_preview');
+        let emailExists = document.getElementById('email_exists');
+        let counter = 2;
+        let exists = false;
+
+        if (base.length > 1) {
+            let checkUrl = '/check-email-exists?email=' + encodeURIComponent(email);
+            let resp = await fetch(checkUrl);
+            exists = await resp.json();
+            while (exists) {
+                email = base + counter + '@missive-si.fr';
+                checkUrl = '/check-email-exists?email=' + encodeURIComponent(email);
+                resp = await fetch(checkUrl);
+                exists = await resp.json();
+                counter++;
+            }
+        }
+
+        emailField.value = email;
+        emailExists.style.display = exists ? 'block' : 'none';
+        emailExists.innerText = exists ? "Cet email existe déjà. Un numéro va être ajouté automatiquement." : "";
+    }
+
+    document.getElementById('prenom').addEventListener('input', updateEmailPreview);
+    document.getElementById('nom').addEventListener('input', updateEmailPreview);
+
+    document.addEventListener('DOMContentLoaded', updateEmailPreview);
+</script>
 @endsection

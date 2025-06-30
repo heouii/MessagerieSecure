@@ -5,48 +5,44 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use PragmaRX\Google2FAQRCode\Google2FA;
-use PragmaRX\Google2FALaravel\Support\Authenticator;
 
 class TwoFactorController extends Controller
 {
+    public function index(Request $request)
+    {
+        $userId = session('2fa:user:id');
+        $user = \App\Models\User::find($userId);
 
-public function index(Request $request)
-{
-    $userId = session('2fa:user:id');
-    $user = \App\Models\User::find($userId);
+        if (!$user) {
+            return redirect('/login')->withErrors(['email' => 'Session expirée. Veuillez vous reconnecter.']);
+        }
 
-    if (!$user) {
-        return redirect('/login')->withErrors(['email' => 'Session expirée. Veuillez vous reconnecter.']);
-    }
-
-    if (!$user->two_factor_secret) {
-        $google2fa = app('pragmarx.google2fa');
-        $user->two_factor_secret = $google2fa->generateSecretKey();
-        $user->save();
-    }
+        if (!$user->two_factor_secret) {
+            $google2fa = app('pragmarx.google2fa');
+            $user->two_factor_secret = $google2fa->generateSecretKey();
+            $user->save();
+        }
 
         $showQr = false;
-$qrCode = null;
+        $qrCode = null;
 
-// Si l'utilisateur n'a PAS confirmé le 2FA, on affiche le QR code (première activation)
-if (!$user->two_factor_confirmed_at) {
-    $google2fa = app('pragmarx.google2fa');
-    $qrCode = $google2fa->getQRCodeInline(
-        config('app.name'),
-        $user->email,
-        $user->two_factor_secret
-    );
-    $showQr = true;
-}
+        // Si l'utilisateur n'a PAS confirmé le 2FA, on affiche le QR code (première activation)
+        if (!$user->two_factor_confirmed_at) {
+            $google2fa = app('pragmarx.google2fa');
+            $qrCode = $google2fa->getQRCodeInline(
+                config('app.name'),
+                $user->email,
+                $user->two_factor_secret // <-- PAS de decrypt
+            );
+            $showQr = true;
+        }
 
-return view('auth.two-factor', [
-    'qrCode' => $qrCode,
-    'showQr' => $showQr,
-    'user' => $user,
-]);
-
-}
+        return view('auth.two-factor', [
+            'qrCode' => $qrCode,
+            'showQr' => $showQr,
+            'user' => $user,
+        ]);
+    }
 
     public function verify(Request $request)
     {
@@ -63,7 +59,10 @@ return view('auth.two-factor', [
 
         $google2fa = app('pragmarx.google2fa');
 
-        $isValid = $google2fa->verifyKey($user->two_factor_secret, $request->input('code'));
+        $isValid = $google2fa->verifyKey(
+            $user->two_factor_secret,
+            $request->input('code')
+        );
 
         if ($isValid) {
             $user->two_factor_confirmed_at = now();
@@ -82,32 +81,31 @@ return view('auth.two-factor', [
     }
 
     public function reset(Request $request)
-{
-    $userId = session('2fa:user:id');
-    $user = \App\Models\User::find($userId);
+    {
+        $userId = session('2fa:user:id');
+        $user = \App\Models\User::find($userId);
 
-    if (!$user) {
-        return redirect('/login')->withErrors(['email' => 'Session expirée. Veuillez vous reconnecter.']);
+        if (!$user) {
+            return redirect('/login')->withErrors(['email' => 'Session expirée. Veuillez vous reconnecter.']);
+        }
+
+        $request->validate([
+            'security_answer' => 'required|string',
+        ]);
+
+        if (!$user->security_question || !$user->security_answer) {
+            return back()->with('reset2fa_error', 'Aucune question de sécurité n\'est enregistrée sur ce compte.');
+        }
+
+        if (!\Hash::check($request->input('security_answer'), $user->security_answer)) {
+            return back()->with('reset2fa_error', 'Réponse à la question de sécurité incorrecte.');
+        }
+
+        $google2fa = app('pragmarx.google2fa');
+        $user->two_factor_secret = $google2fa->generateSecretKey(); // <-- PAS d'encrypt
+        $user->two_factor_confirmed_at = null;
+        $user->save();
+
+        return back()->with('reset2fa_success', 'MFA réinitialisé. Veuillez scanner le nouveau QR code.');
     }
-
-    $request->validate([
-        'security_answer' => 'required|string',
-    ]);
-
-    if (!$user->security_question || !$user->security_answer) {
-        return back()->with('reset2fa_error', 'Aucune question de sécurité n\'est enregistrée sur ce compte.');
-    }
-
-    if (!\Hash::check($request->input('security_answer'), $user->security_answer)) {
-        return back()->with('reset2fa_error', 'Réponse à la question de sécurité incorrecte.');
-    }
-
-    $google2fa = app('pragmarx.google2fa');
-    $user->two_factor_secret = $google2fa->generateSecretKey();
-    $user->two_factor_confirmed_at = null;
-    $user->save();
-
-    return back()->with('reset2fa_success', 'MFA réinitialisé. Veuillez scanner le nouveau QR code.');
-}
-
 }

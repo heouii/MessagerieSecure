@@ -21,7 +21,13 @@ class User extends Authenticatable
         'two_factor_secret',
         'two_factor_recovery_codes',
         'two_factor_confirmed_at',
+        'deleted_at',
+        'security_question',
+        'security_answer',
+        'created_at',
+        'updated_at',
         'is_blocked',
+        'admin',
         'blocked_until',
     ];
 
@@ -42,4 +48,13 @@ class User extends Authenticatable
         $google2fa = new Google2FA();
         return $google2fa->verifyKey($secret, $code);
     }
+
+    public function up()
+{
+    Schema::table('users', function (Blueprint $table) {
+        $table->string('security_question')->nullable();
+        $table->string('security_answer')->nullable();
+    });
+}
+
 }

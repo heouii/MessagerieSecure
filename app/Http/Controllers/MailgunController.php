@@ -33,106 +33,373 @@ class MailgunController extends Controller
     }
 
     /**
-     * Envoi d'email direct (comme Gmail)
+     * Vérifier si l'email ou le domaine est bloqué
      */
-    
-    //Vérifier si l'email ou le domaine est bloqué
     private function isBlacklistedEmail(string $email): bool
     {
-    $email = strtolower($email);
-    $domain = substr(strrchr($email, "@"), 1);
+        $email = strtolower($email);
+        $domain = substr(strrchr($email, "@"), 1);
 
-    return \App\Models\Blacklist::where(function($query) use ($email, $domain) {
-        $query->where(function($q) use ($email) {
-            $q->where('type', 'email')->where('value', $email);
-        })->orWhere(function($q) use ($domain) {
-            $q->where('type', 'domain')->where('value', $domain);
-        });
-    })->exists();
+        return \App\Models\Blacklist::where(function($query) use ($email, $domain) {
+            $query->where(function($q) use ($email) {
+                $q->where('type', 'email')->where('value', $email);
+            })->orWhere(function($q) use ($domain) {
+                $q->where('type', 'domain')->where('value', $domain);
+            });
+        })->exists();
     }
 
-    public function sendEmail(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'to' => 'required|email',
-            'subject' => 'required|string|max:255',
-            'message' => 'required|string',
-            'cc' => 'nullable|email',
-            'html_format' => 'boolean',
-            'read_receipt' => 'boolean',
+    /**
+     * Envoi d'email avec gestion optimisée des pièces jointes
+     */
+ /**
+ * Envoi d'email avec gestion définitivement corrigée des pièces jointes
+ */
+public function sendEmail(Request $request): JsonResponse
+{
+    $validator = Validator::make($request->all(), [
+        'to' => 'required|email',
+        'subject' => 'required|string|max:255',
+        'message' => 'required|string',
+        'cc' => 'nullable|email',
+        'html_format' => 'nullable|in:0,1,true,false',
+        'read_receipt' => 'nullable|in:0,1,true,false',
+        'attachments.*' => 'nullable|file|max:25600',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['error' => $validator->errors()], 422);
+    }
+
+    if ($this->isBlacklistedEmail($request->to)) {
+        return response()->json(['error' => 'Email ou domaine bloqué'], 403);
+    }
+
+    try {
+        // Construire l'email de base
+        $emailData = [
+            'to' => $request->to,
+            'subject' => $request->subject,
+        ];
+
+        // CC si présent
+        if ($request->cc) {
+            $emailData['cc'] = $request->cc;
+        }
+
+        // Format HTML ou texte
+        $isHtmlFormat = in_array($request->html_format, ['1', 'true', 1, true], true);
+        if ($isHtmlFormat) {
+            $emailData['html'] = nl2br(htmlspecialchars($request->message));
+        } else {
+            $emailData['text'] = $request->message;
+        }
+
+        // Tracking (valeurs simples, pas de tableaux)
+        $emailData['o:tracking'] = 'yes';
+        $emailData['o:tracking-opens'] = 'yes';
+        $emailData['o:tag'] = 'sent-email';
+
+        // Traiter les pièces jointes IMMÉDIATEMENT
+        $attachments = [];
+        $tempFiles = [];
+        
+        if ($request->hasFile('attachments')) {
+            // Créer le dossier de stockage temporaire
+            $tempDir = storage_path('app/temp_attachments');
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+            
+            foreach ($request->file('attachments') as $index => $file) {
+                if (!$file->isValid()) {
+                    Log::error('Fichier invalide', ['error' => $file->getErrorMessage()]);
+                    continue;
+                }
+                
+                try {
+                    // Obtenir les informations AVANT de déplacer le fichier
+                    $originalName = $file->getClientOriginalName();
+                    $fileSize = $file->getSize();
+                    $mimeType = $file->getMimeType();
+                    $tempPath = $file->path(); // Chemin temporaire actuel
+                    
+                    Log::info('📄 Traitement fichier', [
+                        'original_name' => $originalName,
+                        'size' => $fileSize,
+                        'mime_type' => $mimeType,
+                        'temp_path' => $tempPath,
+                        'exists' => file_exists($tempPath)
+                    ]);
+                    
+                    // Créer un nom de fichier sécurisé
+                    $safeName = time() . '_' . uniqid() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                    $finalPath = $tempDir . '/' . $safeName;
+                    
+                    // Copier le fichier vers notre dossier temporaire
+                    if (copy($tempPath, $finalPath)) {
+                        $attachments[] = [
+                            'filename' => $originalName,
+                            'safe_name' => $safeName,
+                            'size' => $fileSize,
+                            'mime_type' => $mimeType,
+                            'full_path' => $finalPath
+                        ];
+                        
+                        $tempFiles[] = $finalPath;
+                        
+                        Log::info('✅ Fichier copié avec succès', [
+                            'original' => $originalName,
+                            'path' => $finalPath,
+                            'size' => filesize($finalPath)
+                        ]);
+                    } else {
+                        Log::error('❌ Erreur copie fichier', [
+                            'from' => $tempPath,
+                            'to' => $finalPath
+                        ]);
+                    }
+                    
+                } catch (\Exception $fileEx) {
+                    Log::error('❌ Erreur traitement fichier', [
+                        'error' => $fileEx->getMessage(),
+                        'file' => $originalName ?? 'inconnu'
+                    ]);
+                }
+            }
+        }
+
+        Log::info('📧 Préparation envoi', [
+            'to' => $request->to,
+            'attachments_count' => count($attachments)
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()], 422);
+        // Envoyer l'email
+        if (empty($attachments)) {
+            $response = $this->sendSimpleEmail($emailData);
+        } else {
+            $response = $this->sendEmailWithAttachments($emailData, $attachments);
         }
 
-        $toEmail = strtolower($request->to);
-        if ($this->isBlacklistedEmail($toEmail)) {
-            return response()->json([
-                'error' => "L'adresse email ou le domaine du destinataire est bloqué. Veuillez vérifier l'adresse et réessayer."
-            ], 403);
+        // Nettoyer les fichiers temporaires après envoi
+        foreach ($tempFiles as $tempFile) {
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+                Log::info('🗑️ Fichier temporaire nettoyé', ['file' => basename($tempFile)]);
+            }
         }
 
-        if ($request->cc && $this->isBlacklistedEmail(strtolower($request->cc))) {
-            return response()->json([
-                'error' => "L'adresse email ou le domaine du destinataire en copie est bloqué."
-            ], 403);
-        }
-
-        try {
-            // Construire l'email pour Mailgun
-            $emailData = [
-                'to' => $request->to,
+        if ($response['success']) {
+            // Sauvegarder en base
+            Email::create([
+                'user_id' => auth()->id(),
+                'mailgun_id' => $response['mailgun_id'],
+                'folder' => 'sent',
+                'from_email' => auth()->user()->email,
+                'from_name' => auth()->user()->prenom . ' ' . auth()->user()->nom,
+                'to_email' => $request->to,
+                'cc_email' => $request->cc,
                 'subject' => $request->subject,
-                'from' => auth()->user()->prenom . ' ' . auth()->user()->nom . ' <' . auth()->user()->email . '>',
+                'content' => $request->message,
+                'preview' => substr($request->message, 0, 100),
+                'is_html' => $isHtmlFormat,
+                'is_read' => true,
+                'attachments' => json_encode(array_map(function($a) {
+                    unset($a['full_path']); // Supprimer le chemin complet
+                    return $a;
+                }, $attachments)),
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Email envoyé avec succès',
+                'attachments_sent' => count($attachments)
+            ]);
+        }
+
+        return response()->json(['error' => 'Erreur lors de l\'envoi: ' . ($response['error'] ?? 'Inconnue')], 500);
+
+    } catch (\Exception $e) {
+        Log::error('💥 Erreur envoi email', [
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
+        ]);
+        return response()->json(['error' => 'Erreur système: ' . $e->getMessage()], 500);
+    }
+}
+
+/**
+ * Méthode simple pour les emails sans pièce jointe
+ */
+private function sendSimpleEmail(array $emailData): array
+{
+    try {
+        $url = "https://{$this->mailgunEndpoint}/v3/{$this->mailgunDomain}/messages";
+        
+        $response = Http::withBasicAuth('api', $this->mailgunSecret)
+            ->timeout(60)
+            ->asForm()
+            ->post($url, array_merge([
+                'from' => config('mail.from.name') . ' <' . config('mail.from.address') . '>',
+            ], $emailData));
+
+        if ($response->successful()) {
+            $data = $response->json();
+            return [
+                'success' => true,
+                'mailgun_id' => $data['id'] ?? null,
+                'message' => $data['message'] ?? 'Envoyé'
             ];
+        }
 
-            if ($request->cc) {
-                $emailData['cc'] = $request->cc;
-            }
+        Log::error('❌ Erreur HTTP simple', ['status' => $response->status(), 'body' => $response->body()]);
+        return ['success' => false, 'error' => 'HTTP ' . $response->status()];
 
-            if ($request->html_format) {
-                $emailData['html'] = nl2br(htmlspecialchars($request->message));
+    } catch (\Exception $e) {
+        Log::error('❌ Exception email simple', ['error' => $e->getMessage()]);
+        return ['success' => false, 'error' => $e->getMessage()];
+    }
+}
+
+/**
+ * Méthode pour les emails avec pièces jointes via cURL
+ */
+private function sendEmailWithAttachments(array $emailData, array $attachments): array
+{
+    try {
+        $url = "https://{$this->mailgunEndpoint}/v3/{$this->mailgunDomain}/messages";
+        
+        Log::info('📎 Envoi avec pièces jointes', [
+            'attachments_count' => count($attachments)
+        ]);
+        
+        // Construire la commande cURL
+        $cmd = "curl -s " . escapeshellarg($url);
+        $cmd .= " -u " . escapeshellarg("api:{$this->mailgunSecret}");
+        
+        // Paramètres de base
+        $params = array_merge([
+            'from' => config('mail.from.name') . ' <' . config('mail.from.address') . '>',
+        ], $emailData);
+        
+        // Ajouter les paramètres (gérer les tableaux correctement)
+        foreach ($params as $key => $value) {
+            if (is_array($value)) {
+                foreach ($value as $arrayValue) {
+                    $cmd .= " -F " . escapeshellarg("{$key}={$arrayValue}");
+                }
             } else {
-                $emailData['text'] = $request->message;
+                $cmd .= " -F " . escapeshellarg("{$key}={$value}");
             }
-
-            // Tracking, envoi etc.
-            $emailData['o:tracking'] = 'yes';
-            $emailData['o:tracking-opens'] = 'yes';
-            $emailData['o:tag'] = ['sent-email', 'user-' . auth()->id()];
-
-            $response = $this->sendMailgunEmail($emailData);
-
-            if ($response['success']) {
-                Email::create([
-                    'user_id' => auth()->id(),
-                    'mailgun_id' => $response['mailgun_id'],
-                    'folder' => 'sent',
-                    'from_email' => auth()->user()->email,
-                    'from_name' => auth()->user()->prenom . ' ' . auth()->user()->nom,
-                    'to_email' => $request->to,
-                    'cc_email' => $request->cc,
-                    'subject' => $request->subject,
-                    'content' => $request->message,
-                    'preview' => substr($request->message, 0, 100),
-                    'is_html' => $request->html_format ?? false,
-                    'is_read' => true,
+        }
+        
+        // Ajouter les pièces jointes
+        foreach ($attachments as $attachment) {
+            if (file_exists($attachment['full_path'])) {
+                $cmd .= " -F " . escapeshellarg("attachment=@{$attachment['full_path']}");
+                
+                Log::info('📎 Pièce jointe ajoutée', [
+                    'file' => $attachment['filename'],
+                    'size' => filesize($attachment['full_path'])
                 ]);
-
-                return response()->json([
+            } else {
+                Log::error('❌ Fichier non trouvé', [
+                    'path' => $attachment['full_path']
+                ]);
+            }
+        }
+        
+        // Exécuter la commande
+        $output = [];
+        $returnCode = 0;
+        exec($cmd, $output, $returnCode);
+        
+        $response = implode("\n", $output);
+        
+        Log::info('📊 Résultat envoi', [
+            'return_code' => $returnCode,
+            'response' => $response
+        ]);
+        
+        if ($returnCode === 0 && !empty($response)) {
+            $data = json_decode($response, true);
+            if ($data && isset($data['id'])) {
+                return [
                     'success' => true,
-                    'message' => 'Email envoyé avec succès'
-                ]);
+                    'mailgun_id' => $data['id'],
+                    'message' => $data['message'] ?? 'Envoyé avec pièces jointes'
+                ];
             }
-
-            return response()->json(['error' => 'Erreur lors de l\'envoi'], 500);
-
-        } catch (\Exception $e) {
-            Log::error('Erreur envoi email', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Erreur système'], 500);
+        }
+        
+        return ['success' => false, 'error' => "Erreur cURL: {$response}"];
+        
+    } catch (\Exception $e) {
+        Log::error('❌ Exception cURL', ['error' => $e->getMessage()]);
+        return ['success' => false, 'error' => $e->getMessage()];
+    }
+}
+    /**
+     * Construire la commande cURL pour l'envoi avec pièces jointes
+     */
+   /**
+ * Construire la commande cURL qui fonctionne - basée sur le test manuel réussi
+ */
+private function buildCurlCommand(string $url, array $emailData, array $attachments): string
+{
+    // Démarrer la commande comme dans le test qui fonctionne
+    $parts = [];
+    $parts[] = "curl -v";
+    $parts[] = escapeshellarg($url);
+    $parts[] = "-u " . escapeshellarg("api:{$this->mailgunSecret}");
+    
+    // Ajouter les paramètres de base
+    $params = array_merge([
+        'from' => config('mail.from.name') . ' <' . config('mail.from.address') . '>',
+    ], $emailData);
+    
+    foreach ($params as $key => $value) {
+        if (is_array($value)) {
+            foreach ($value as $val) {
+                $parts[] = "-F " . escapeshellarg("{$key}={$val}");
+            }
+        } else {
+            $parts[] = "-F " . escapeshellarg("{$key}={$value}");
         }
     }
+    
+    // Ajouter les pièces jointes avec la syntaxe exacte qui fonctionne
+    foreach ($attachments as $index => $attachment) {
+        if (file_exists($attachment['full_path'])) {
+            // Syntaxe exacte : attachment=@/path/to/file
+            $parts[] = "-F " . escapeshellarg("attachment=@{$attachment['full_path']}");
+            
+            Log::info('📎 Pièce jointe ajoutée', [
+                'filename' => $attachment['filename'],
+                'path' => $attachment['full_path'],
+                'exists' => file_exists($attachment['full_path']),
+                'size' => filesize($attachment['full_path'])
+            ]);
+        } else {
+            Log::error('❌ Fichier pièce jointe introuvable', [
+                'path' => $attachment['full_path'],
+                'filename' => $attachment['filename']
+            ]);
+        }
+    }
+    
+    // Joindre toutes les parties
+    $curlCommand = implode(' ', $parts);
+    
+    Log::info('🔧 Commande cURL construite', [
+        'command_length' => strlen($curlCommand),
+        'attachments_count' => count($attachments),
+        'command_preview' => substr($curlCommand, 0, 200) . '...'
+    ]);
+    
+    return $curlCommand;
+}
 
     /**
      * Récupérer les emails par dossier
@@ -168,6 +435,8 @@ class MailgunController extends Controller
                     'preview' => $email->preview ?: substr($email->content, 0, 100),
                     'date' => $email->created_at,
                     'read' => $email->is_read,
+                    'attachments' => $email->attachments ? json_decode($email->attachments, true) : [],
+                    'signature_verified' => $email->signature_verified ?? true,
                 ];
             });
 
@@ -349,6 +618,30 @@ class MailgunController extends Controller
             $subject = $request->input('Subject') ?? $request->input('subject') ?? 'Sans objet';
             $bodyPlain = $request->input('body-plain') ?? '';
             $bodyHtml = $request->input('body-html') ?? '';
+
+            // Traiter les pièces jointes entrantes
+            $attachments = [];
+            $attachmentCount = $request->input('attachment-count', 0);
+
+            for ($i = 1; $i <= $attachmentCount; $i++) {
+                if ($request->hasFile("attachment-{$i}")) {
+                    $file = $request->file("attachment-{$i}");
+                    $filename = time() . '_' . $file->getClientOriginalName();
+                    $path = $file->storeAs('incoming_attachments', $filename, 'private');
+                    
+                    $attachments[] = [
+                        'filename' => $file->getClientOriginalName(),
+                        'path' => $path,
+                        'size' => $file->getSize(),
+                        'mime_type' => $file->getMimeType()
+                    ];
+                    
+                    Log::info('📎 Pièce jointe reçue', [
+                        'filename' => $file->getClientOriginalName(),
+                        'size' => $file->getSize()
+                    ]);
+                }
+            }
             
             // Trouver l'utilisateur
             $userId = $this->findUserByEmail($to);
@@ -358,7 +651,7 @@ class MailgunController extends Controller
                 return response()->json(['error' => 'Destinataire non trouvé'], 404);
             }
 
-            // Créer l'email avec le bon dossier
+            // Créer l'email avec le bon dossier et les pièces jointes
             $email = Email::create([
                 'user_id' => $userId,
                 'folder' => $folder, // 'inbox' ou 'unverified'
@@ -370,20 +663,23 @@ class MailgunController extends Controller
                 'preview' => substr($bodyPlain ?: strip_tags($bodyHtml), 0, 100),
                 'is_html' => !empty($bodyHtml),
                 'is_read' => false,
-                'signature_verified' => $isSignatureValid, // Nouveau champ
+                'signature_verified' => $isSignatureValid,
+                'attachments' => json_encode($attachments),
             ]);
 
             Log::info('✅ Email sauvegardé', [
                 'email_id' => $email->id,
                 'folder' => $folder,
-                'signature_valid' => $isSignatureValid
+                'signature_valid' => $isSignatureValid,
+                'attachments_count' => count($attachments)
             ]);
 
             return response()->json([
                 'success' => true, 
                 'email_id' => $email->id,
                 'folder' => $folder,
-                'signature_verified' => $isSignatureValid
+                'signature_verified' => $isSignatureValid,
+                'attachments_count' => count($attachments)
             ]);
 
         } catch (\Exception $e) {
@@ -407,7 +703,7 @@ class MailgunController extends Controller
             
             if (!$timestamp || !$token || !$signature) {
                 Log::info('🔐 Paramètres de signature manquants');
-                return false; // ⚠️ Retourner false, ne pas lever d'erreur
+                return false;
             }
             
             // Vérifier que le timestamp n'est pas trop ancien (15 minutes max)
@@ -435,7 +731,7 @@ class MailgunController extends Controller
             
         } catch (\Exception $e) {
             Log::error('🔐 Erreur vérification signature', ['error' => $e->getMessage()]);
-            return false; // ⚠️ En cas d'erreur, considérer comme non vérifié
+            return false;
         }
     }
 
@@ -453,7 +749,6 @@ class MailgunController extends Controller
             return $user->id;
         }
         
-        // Si pas trouvé, créer un utilisateur temporaire ou retourner null
         Log::info('Utilisateur non trouvé pour l\'email', ['email' => $cleanEmail]);
         return null;
     }
@@ -479,39 +774,6 @@ class MailgunController extends Controller
         }
         return null;
     }
-    
-
-    // ==================== MÉTHODE PRIVÉE ====================
-
-    /**
-     * Envoyer email via Mailgun
-     */
-    private function sendMailgunEmail(array $params): array
-    {
-        try {
-            $response = Http::withBasicAuth('api', $this->mailgunSecret)
-                ->asForm()
-                ->post("https://{$this->mailgunEndpoint}/v3/{$this->mailgunDomain}/messages", array_merge([
-                    'from' => config('mail.from.name') . ' <' . config('mail.from.address') . '>',
-                ], $params));
-
-            if ($response->successful()) {
-                $data = $response->json();
-                return [
-                    'success' => true,
-                    'mailgun_id' => $data['id'] ?? null,
-                    'message' => $data['message'] ?? 'Envoyé'
-                ];
-            }
-
-            Log::error('Erreur Mailgun', ['response' => $response->body()]);
-            return ['success' => false, 'error' => 'Erreur Mailgun API'];
-
-        } catch (\Exception $e) {
-            Log::error('Exception Mailgun', ['error' => $e->getMessage()]);
-            return ['success' => false, 'error' => $e->getMessage()];
-        }
-    }
 
     /**
      * Tester l'accessibilité du webhook Mailgun
@@ -525,5 +787,43 @@ class MailgunController extends Controller
             'method' => $request->method(),
             'headers' => $request->headers->all()
         ]);
+    }
+
+    /**
+     * Télécharger une pièce jointe (pour les emails reçus)
+     */
+    public function downloadAttachment(Request $request, $emailId, $attachmentIndex): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        try {
+            $email = Email::where('user_id', auth()->id())->findOrFail($emailId);
+            $attachments = json_decode($email->attachments, true) ?? [];
+            
+            if (!isset($attachments[$attachmentIndex])) {
+                abort(404, 'Pièce jointe non trouvée');
+            }
+            
+            $attachment = $attachments[$attachmentIndex];
+            $filePath = storage_path('app/private/' . $attachment['path']);
+            
+            if (!file_exists($filePath)) {
+                abort(404, 'Fichier non trouvé');
+            }
+            
+            Log::info('📥 Téléchargement pièce jointe', [
+                'user_id' => auth()->id(),
+                'email_id' => $emailId,
+                'filename' => $attachment['filename']
+            ]);
+            
+            return response()->download($filePath, $attachment['filename']);
+            
+        } catch (\Exception $e) {
+            Log::error('Erreur téléchargement pièce jointe', [
+                'error' => $e->getMessage(),
+                'email_id' => $emailId,
+                'attachment_index' => $attachmentIndex
+            ]);
+            abort(500, 'Erreur lors du téléchargement');
+        }
     }
 }

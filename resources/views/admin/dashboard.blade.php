@@ -46,9 +46,9 @@
         </div>
         <div class="col-md-6">
             <div class="card shadow-sm h-100">
-                <div class="card-header fw-bold bg-light">Répartition des rôles</div>
+                <div class="card-header fw-bold bg-light">Utilisateurs actifs vs bloqués</div>
                 <div class="card-body d-flex align-items-center justify-content-center">
-                    <canvas id="chartRoles" style="max-height: 250px; width: 100%;"></canvas>
+                    <canvas id="chartUserStatus" style="max-height: 250px; width: 100%;"></canvas>
                 </div>
             </div>
         </div>
@@ -125,16 +125,25 @@
         options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
     });
 
-    new Chart(document.getElementById('chartRoles'), {
+    // Nouveau graphique Utilisateurs actifs vs bloqués
+    new Chart(document.getElementById('chartUserStatus'), {
         type: 'doughnut',
         data: {
-            labels: ['Utilisateurs', 'Admins'],
+            labels: ['Utilisateurs actifs', 'Utilisateurs bloqués'],
             datasets: [{
-                data: [{{ $totalUsers - $totalAdmins }}, {{ $totalAdmins }}],
-                backgroundColor: ['#BA68C8', '#9575CD']
+                data: [{{ $totalUsers - $blockedUsersCount }}, {{ $blockedUsersCount }}],
+                backgroundColor: ['#9575CD', '#CE93D8'],
+                hoverOffset: 20,
+                borderWidth: 2,
+                borderColor: '#fff'
             }]
         },
-        options: { plugins: { legend: { position: 'bottom' } } }
+        options: {
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            cutout: '70%'
+        }
     });
 
     new Chart(document.getElementById('chartSpams'), {

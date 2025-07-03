@@ -265,8 +265,19 @@
                     
                     <div class="flex-1 p-4">
                         <textarea id="messageField" required
-                                  class="w-full h-64 px-3 py-2 border border-gray-300 rounded resize-none" style="--tw-ring-color: #BAA8D3;" onfocus="this.style.borderColor='#9280A3'" onblur="this.style.borderColor='#BAA8D3'"
+                                  class="w-full h-48 px-3 py-2 border border-gray-300 rounded resize-none mb-4" style="--tw-ring-color: #BAA8D3;" onfocus="this.style.borderColor='#9280A3'" onblur="this.style.borderColor='#BAA8D3'"
                                   placeholder="Écrivez votre message ici..."></textarea>
+                        
+                        <!-- Pièces jointes -->
+                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center" id="attachmentZone" style="transition: border-color 0.3s;">
+                            <input type="file" id="attachmentInput" multiple class="hidden" accept="*/*">
+                            <div id="attachmentPlaceholder">
+                                <i class="fas fa-paperclip text-gray-400 text-2xl mb-2"></i>
+                                <p class="text-gray-500 mb-2">Glissez vos fichiers ici ou <button type="button" id="browseFiles" class="text-purple-600 underline">parcourez</button></p>
+                                <p class="text-xs text-gray-400">Maximum 25MB par fichier</p>
+                            </div>
+                            <div id="attachmentList" class="hidden space-y-2"></div>
+                        </div>
                     </div>
                     
                     <div class="p-4 border-t border-gray-200 flex items-center justify-between">
@@ -332,6 +343,14 @@
                 
                 <div class="p-6 flex-1 overflow-y-auto max-h-96">
                     <div id="readContent" class="prose max-w-none"></div>
+                    
+                    <!-- Pièces jointes reçues -->
+                    <div id="emailAttachments" class="mt-4 hidden">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-2">
+                            <i class="fas fa-paperclip mr-1"></i>Pièces jointes
+                        </h4>
+                        <div id="attachmentsList" class="space-y-2"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -345,6 +364,7 @@
         const API_BASE = '';
         let currentView = 'inbox';
         let currentEmails = [];
+        let attachedFiles = []; // Nouveau : stockage des fichiers
         
         // Éléments DOM
         const composeBtn = document.getElementById('composeBtn');
@@ -355,6 +375,11 @@
         const refreshBtn = document.getElementById('refreshBtn');
         const readModal = document.getElementById('readModal');
         const closeReadBtn = document.getElementById('closeReadBtn');
+        const attachmentInput = document.getElementById('attachmentInput');
+        const attachmentZone = document.getElementById('attachmentZone');
+        const browseFiles = document.getElementById('browseFiles');
+        const attachmentList = document.getElementById('attachmentList');
+        const attachmentPlaceholder = document.getElementById('attachmentPlaceholder');
         
         // Navigation sidebar
         document.querySelectorAll('.sidebar-item').forEach(item => {
@@ -395,7 +420,38 @@
             e.stopPropagation();
             composeModal.classList.add('hidden');
             composeForm.reset();
+            clearAttachments(); // Nouveau : vider les pièces jointes
             return false;
+        });
+        
+        // Gestion des pièces jointes
+        browseFiles.addEventListener('click', (e) => {
+            e.preventDefault();
+            attachmentInput.click();
+        });
+        
+        attachmentInput.addEventListener('change', handleFileSelect);
+        
+        // Drag & Drop
+        attachmentZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            attachmentZone.style.borderColor = '#BAA8D3';
+            attachmentZone.style.backgroundColor = '#f8f9fa';
+        });
+        
+        attachmentZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            attachmentZone.style.borderColor = '#d1d5db';
+            attachmentZone.style.backgroundColor = 'transparent';
+        });
+        
+        attachmentZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            attachmentZone.style.borderColor = '#d1d5db';
+            attachmentZone.style.backgroundColor = 'transparent';
+            
+            const files = Array.from(e.dataTransfer.files);
+            addFiles(files);
         });
         
         // Fermer modal en cliquant à côté
@@ -424,14 +480,20 @@
         composeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const formData = {
-                to: document.getElementById('toField').value,
-                cc: document.getElementById('ccField').value,
-                subject: document.getElementById('subjectField').value,
-                message: document.getElementById('messageField').value,
-                html_format: document.getElementById('htmlFormat').checked,
-                read_receipt: document.getElementById('readReceipt').checked
-            };
+            const formData = new FormData();
+            formData.append('to', document.getElementById('toField').value);
+            formData.append('cc', document.getElementById('ccField').value);
+            formData.append('subject', document.getElementById('subjectField').value);
+            formData.append('message', document.getElementById('messageField').value);
+            
+            // Conversion correcte des booléens
+            formData.append('html_format', document.getElementById('htmlFormat').checked ? 1 : 0);
+            formData.append('read_receipt', document.getElementById('readReceipt').checked ? 1 : 0);
+            
+            // Ajouter les pièces jointes
+            attachedFiles.forEach((file, index) => {
+                formData.append(`attachments[${index}]`, file);
+            });
             
             const sendBtn = document.getElementById('sendBtn');
             const originalText = sendBtn.innerHTML;
@@ -442,10 +504,10 @@
                 const response = await fetch('/mailgun-send', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        // Pas de Content-Type pour FormData (boundary automatique)
                     },
-                    body: JSON.stringify(formData)
+                    body: formData
                 });
                 
                 const data = await response.json();
@@ -454,12 +516,17 @@
                     showNotification('Email envoyé avec succès !', 'success');
                     composeModal.classList.add('hidden');
                     composeForm.reset();
+                    clearAttachments();
                     loadEmails();
                 } else {
-                    showNotification(data.error || 'Erreur lors de l\'envoi', 'error');
+                    // Améliorer l'affichage des erreurs
+                    const errorMessage = data.error || data.message || 'Erreur lors de l\'envoi';
+                    console.error('Erreur envoi:', data);
+                    showNotification(errorMessage, 'error');
                 }
                 
             } catch (error) {
+                console.error('Erreur réseau:', error);
                 showNotification('Erreur de connexion', 'error');
             } finally {
                 sendBtn.innerHTML = originalText;
@@ -573,6 +640,10 @@
                                     </div>
                                     <p class="text-sm font-medium text-gray-800 truncate">${email.subject}</p>
                                     <p class="text-sm text-gray-600 truncate">${email.preview}</p>
+                                    ${email.attachments && email.attachments.length > 0 ? 
+                                        `<p class="text-xs text-gray-500 mt-1">
+                                            <i class="fas fa-paperclip mr-1"></i>${Array.isArray(email.attachments) ? email.attachments.length : '1'} pièce(s) jointe(s)
+                                        </p>` : ''}
                                 </div>
                             </div>
                             <div class="flex items-center space-x-2">
@@ -601,23 +672,23 @@
         
         // Ouvrir un email
         function openEmail(emailId) {
-            console.log('Ouverture email ID:', emailId); // Debug
-            console.log('Emails disponibles:', currentEmails); // Debug
+            console.log('Ouverture email ID:', emailId);
             
-            const email = currentEmails.find(e => e.id == emailId); // Utiliser == au lieu de ===
+            const email = currentEmails.find(e => e.id == emailId);
             if (!email) {
                 console.error('Email non trouvé:', emailId);
                 showNotification('Email non trouvé', 'error');
                 return;
             }
             
-            console.log('Email trouvé:', email); // Debug
-            
             document.getElementById('readSubject').textContent = email.subject || 'Sans objet';
             document.getElementById('readFrom').textContent = email.from_name || email.from || 'Expéditeur inconnu';
             document.getElementById('readDate').textContent = formatDate(email.date || email.created_at);
             document.getElementById('readTo').textContent = email.to || 'Destinataire inconnu';
             document.getElementById('readContent').innerHTML = email.content || 'Contenu vide';
+            
+            // Afficher les pièces jointes si présentes
+            displayEmailAttachments(email.attachments);
             
             // Badge de sécurité dans le modal
             const isVerified = email.signature_verified !== false && currentView !== 'unverified';
@@ -632,6 +703,130 @@
             if (!email.read) {
                 markAsRead(emailId);
             }
+        }
+        
+        // Fonctions pour les pièces jointes
+        function handleFileSelect(e) {
+            const files = Array.from(e.target.files);
+            addFiles(files);
+        }
+        
+        function addFiles(files) {
+            files.forEach(file => {
+                if (file.size > 25 * 1024 * 1024) { // 25MB max
+                    showNotification(`Le fichier ${file.name} est trop volumineux (max 25MB)`, 'error');
+                    return;
+                }
+                
+                if (!attachedFiles.find(f => f.name === file.name && f.size === file.size)) {
+                    attachedFiles.push(file);
+                }
+            });
+            
+            displayAttachments();
+        }
+        
+        function displayAttachments() {
+            if (attachedFiles.length === 0) {
+                attachmentPlaceholder.classList.remove('hidden');
+                attachmentList.classList.add('hidden');
+                return;
+            }
+            
+            attachmentPlaceholder.classList.add('hidden');
+            attachmentList.classList.remove('hidden');
+            
+            attachmentList.innerHTML = attachedFiles.map((file, index) => `
+                <div class="flex items-center justify-between bg-gray-50 p-2 rounded">
+                    <div class="flex items-center space-x-2">
+                        <i class="fas fa-file text-gray-500"></i>
+                        <span class="text-sm text-gray-700">${file.name}</span>
+                        <span class="text-xs text-gray-500">(${formatFileSize(file.size)})</span>
+                    </div>
+                    <button type="button" onclick="removeAttachment(${index})" class="text-red-500 hover:text-red-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+        
+        function removeAttachment(index) {
+            attachedFiles.splice(index, 1);
+            displayAttachments();
+        }
+        
+        function clearAttachments() {
+            attachedFiles = [];
+            attachmentInput.value = '';
+            displayAttachments();
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function displayEmailAttachments(attachments) {
+            const emailAttachmentsDiv = document.getElementById('emailAttachments');
+            const attachmentsListDiv = document.getElementById('attachmentsList');
+            
+            // Debug pour voir ce qu'on reçoit
+            console.log('Attachments reçus:', attachments, typeof attachments);
+            
+            if (!attachments) {
+                emailAttachmentsDiv.classList.add('hidden');
+                return;
+            }
+            
+            let attachmentData = [];
+            
+            // Gérer différents formats d'attachments
+            if (typeof attachments === 'string') {
+                try {
+                    attachmentData = JSON.parse(attachments);
+                } catch (e) {
+                    console.error('Erreur parsing attachments:', e);
+                    emailAttachmentsDiv.classList.add('hidden');
+                    return;
+                }
+            } else if (Array.isArray(attachments)) {
+                attachmentData = attachments;
+            } else if (typeof attachments === 'object') {
+                attachmentData = [attachments];
+            }
+            
+            if (!Array.isArray(attachmentData) || attachmentData.length === 0) {
+                emailAttachmentsDiv.classList.add('hidden');
+                return;
+            }
+            
+            emailAttachmentsDiv.classList.remove('hidden');
+            
+            attachmentsListDiv.innerHTML = attachmentData.map(attachment => {
+                // S'assurer que attachment est un objet valide
+                const filename = attachment.filename || attachment.name || 'Fichier sans nom';
+                const size = attachment.size || 0;
+                const attachmentId = attachment.id || attachment.path || '#';
+                
+                return `
+                    <div class="flex items-center justify-between bg-gray-50 p-3 rounded">
+                        <div class="flex items-center space-x-3">
+                            <i class="fas fa-file text-gray-500"></i>
+                            <div>
+                                <p class="text-sm font-medium text-gray-700">${filename}</p>
+                                <p class="text-xs text-gray-500">${formatFileSize(size)}</p>
+                            </div>
+                        </div>
+                        <a href="/download-attachment/${attachmentId}" 
+                           class="text-purple-600 hover:text-purple-800 text-sm">
+                            <i class="fas fa-download mr-1"></i>Télécharger
+                        </a>
+                    </div>
+                `;
+            }).join('');
         }
         
         // Marquer comme lu
@@ -671,8 +866,17 @@
             return date.toLocaleDateString('fr-FR');
         }
         
-        // Notifications
+        // Notifications avec gestion d'erreur améliorée
         function showNotification(message, type = 'info') {
+            // S'assurer que message est une string
+            let displayMessage = message;
+            if (typeof message === 'object') {
+                displayMessage = JSON.stringify(message);
+            }
+            if (!displayMessage || displayMessage === '[object Object]') {
+                displayMessage = 'Une erreur est survenue';
+            }
+            
             const notification = document.createElement('div');
             const colors = {
                 success: 'bg-green-500',
@@ -684,7 +888,7 @@
             notification.innerHTML = `
                 <div class="flex items-center">
                     <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'times' : 'info'} mr-2"></i>
-                    ${message}
+                    ${displayMessage}
                 </div>
             `;
             

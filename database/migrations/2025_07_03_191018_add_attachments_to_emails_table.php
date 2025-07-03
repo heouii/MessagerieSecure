@@ -9,8 +9,8 @@ return new class extends Migration
     public function up()
     {
         Schema::table('emails', function (Blueprint $table) {
-            if (!Schema::hasColumn('emails', 'signature_verified')) {
-                $table->boolean('signature_verified')->default(false)->after('is_read');
+            if (!Schema::hasColumn('emails', 'attachments')) {
+                $table->json('attachments')->nullable()->after('is_html');
             }
         });
     }
@@ -18,8 +18,8 @@ return new class extends Migration
     public function down()
     {
         Schema::table('emails', function (Blueprint $table) {
-            if (Schema::hasColumn('emails', 'signature_verified')) {
-                $table->dropColumn('signature_verified');
+            if (Schema::hasColumn('emails', 'attachments')) {
+                $table->dropColumn('attachments');
             }
         });
     }

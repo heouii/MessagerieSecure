@@ -28,9 +28,16 @@ class BlacklistController extends Controller
                 'string',
                 'unique:blacklists,value',
                 function ($attribute, $value, $fail) use ($request) {
+                    $value = trim($value);
                     if ($request->type === 'domain') {
+
                         if (!filter_var($value, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
                             $fail("La valeur doit être un domaine valide (ex: exemple.com).");
+                            return;
+                        }
+
+                        if (!preg_match('/\.[a-z]{2,}$/i', $value)) {
+                            $fail("Le domaine doit contenir une extension valide (ex: .com, .fr, .net).");
                         }
                     } elseif ($request->type === 'email') {
                         if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
@@ -60,9 +67,14 @@ class BlacklistController extends Controller
                 'string',
                 'unique:blacklists,value,' . $blacklist->id,
                 function ($attribute, $value, $fail) use ($request) {
+                    $value = trim($value);
                     if ($request->type === 'domain') {
                         if (!filter_var($value, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
                             $fail("La valeur doit être un domaine valide (ex: exemple.com).");
+                            return;
+                        }
+                        if (!preg_match('/\.[a-z]{2,}$/i', $value)) {
+                            $fail("Le domaine doit contenir une extension valide (ex: .com, .fr, .net).");
                         }
                     } elseif ($request->type === 'email') {
                         if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {

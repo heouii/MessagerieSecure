@@ -26,13 +26,12 @@ class TwoFactorController extends Controller
         $showQr = false;
         $qrCode = null;
 
-        // Si l'utilisateur n'a PAS confirmé le 2FA, on affiche le QR code (première activation)
         if (!$user->two_factor_confirmed_at) {
             $google2fa = app('pragmarx.google2fa');
             $qrCode = $google2fa->getQRCodeInline(
                 config('app.name'),
                 $user->email,
-                $user->two_factor_secret // <-- PAS de decrypt
+                $user->two_factor_secret
             );
             $showQr = true;
         }
@@ -102,7 +101,7 @@ class TwoFactorController extends Controller
         }
 
         $google2fa = app('pragmarx.google2fa');
-        $user->two_factor_secret = $google2fa->generateSecretKey(); // <-- PAS d'encrypt
+        $user->two_factor_secret = $google2fa->generateSecretKey();
         $user->two_factor_confirmed_at = null;
         $user->save();
 

@@ -106,7 +106,7 @@
         let prenom = document.getElementById('prenom').value;
         let nom = document.getElementById('nom').value;
         let base = sanitize(prenom) + '.' + sanitize(nom);
-        let email = base + '@missive-si.fr';
+        let email = base + '@mg.missive-si.fr';
         let emailField = document.getElementById('email_preview');
         let emailExists = document.getElementById('email_exists');
         let counter = 2;
@@ -117,7 +117,7 @@
             let resp = await fetch(checkUrl);
             exists = await resp.json();
             while (exists) {
-                email = base + counter + '@missive-si.fr';
+                email = base + counter + '@mg.missive-si.fr';
                 checkUrl = '/check-email-exists?email=' + encodeURIComponent(email);
                 resp = await fetch(checkUrl);
                 exists = await resp.json();

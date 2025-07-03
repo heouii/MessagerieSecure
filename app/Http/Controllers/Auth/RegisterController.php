@@ -18,11 +18,11 @@ class RegisterController extends Controller
 
     protected function generateUniqueEmail($prenom, $nom)
     {
-        $base = strtolower($prenom . '.' . $nom . '@missive-si.fr');
+        $base = strtolower($prenom . '.' . $nom . '@mg.missive-si.fr');
         $email = $base;
         $i = 2;
         while (User::where('email', $email)->exists()) {
-            $email = strtolower($prenom . '.' . $nom . $i . '@missive-si.fr');
+            $email = strtolower($prenom . '.' . $nom . $i . '@mg.missive-si.fr');
             $i++;
         }
         return $email;

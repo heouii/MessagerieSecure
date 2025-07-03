@@ -1,85 +1,145 @@
 @extends('layouts.app')
 
 @section('content')
+<div class="dashboard-wrapper">
 
-{{-- Alertes de succès ou erreurs --}}
-@if (session('success'))
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        {{ session('success') }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fermer"></button>
+    {{-- Titre principal --}}
+    <h1 class="dashboard-title">
+        Bienvenue, {{ auth()->user()->prenom }} {{ auth()->user()->nom }}
+    </h1>
+
+    {{-- Petit widget d’intro --}}
+    <div class="dashboard-welcome">
+        Heure actuelle : <span id="clock"></span>
     </div>
-@endif
 
-@if ($errors->any())
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <ul class="mb-0">
-            @foreach ($errors->all() as $error)
-                <li>{{ $error }}</li>
-            @endforeach
-        </ul>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fermer"></button>
-    </div>
-@endif
-
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Bienvenue, {{ auth()->user()->prenom }} {{ auth()->user()->nom }}</h2>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#nouveauMessage">
-        <i class="fas fa-plus"></i> Nouveau Message
-    </button>
-</div>
-
-<div class="row">
-    @foreach($messages as $message)
-    <div class="col-md-6">
-        <div class="card mb-4 shadow-sm">
-            <div class="card-header">
-                <a href="{{ route('messages.show', $message->id) }}">
-                    <strong>{{ $message->sujet }}</strong>
-                </a>
-            </div>
-            <div class="card-body">
-                <p class="card-text">{{ \Illuminate\Support\Str::limit($message->contenu, 100) }}</p>
-                <small class="text-muted">Reçu le {{ $message->created_at->format('d/m/Y à H:i') }}</small>
-            </div>
+    {{-- Grille des tuiles --}}
+    <div class="dashboard-grid">
+        <div class="tile">
+            <i class="fas fa-envelope-open-text"></i>
+            <h3>Messagerie Sécurisée</h3>
+            <p>Envoyez et recevez vos messages cryptés.</p>
+            <a href="{{ route('mailgun.index') }}">Ouvrir</a>
+        </div>
+        <div class="tile">
+            <i class="fas fa-chart-pie"></i>
+            <h3>Statistiques</h3>
+            <p>Consultez l’activité et vos indicateurs.</p>
+            <a href="{{ route('dashboard') }}">Consulter</a>
+        </div>
+        <div class="tile">
+            <i class="fas fa-user-circle"></i>
+            <h3>Profil</h3>
+            <p>Mettez à jour vos informations personnelles.</p>
+            <a href="{{ route('profil.show') }}">Gérer</a>
+        </div>
+        <div class="tile">
+            <i class="fas fa-cogs"></i>
+            <h3>Paramètres</h3>
+            <p>Configurez votre compte et votre sécurité.</p>
+            <a href="{{ route('parametres') }}">Paramètres</a>
         </div>
     </div>
-    @endforeach
 </div>
 
-<div class="modal fade" id="nouveauMessage" tabindex="-1" aria-labelledby="nouveauMessageLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <form method="POST" action="{{ route('messages.store') }}" enctype="multipart/form-data">
-            @csrf
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="nouveauMessageLabel">Nouveau Message</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="destinataire" class="form-label">Destinataire</label>
-                        <input type="email" name="destinataire" class="form-control" id="destinataire" required placeholder="Entrez l'email du destinataire">
-                    </div>
-                    <div class="mb-3">
-                        <label for="sujet" class="form-label">Sujet</label>
-                        <input type="text" name="sujet" class="form-control" id="sujet" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="contenu" class="form-label">Contenu</label>
-                        <textarea name="contenu" class="form-control" id="contenu" rows="4" required></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label for="piece_jointe" class="form-label">Pièce jointe (facultative)</label>
-                        <input type="file" name="piece_jointe" class="form-control" id="piece_jointe">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                    <button type="submit" class="btn btn-primary" >Envoyer</button>
-                </div>
-            </div>
-        </form>
-    </div>
-</div>
+<style>
+/* Fond général */
+body {
+    background: #ece8f4;
+}
 
+/* Conteneur */
+.dashboard-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Titre */
+.dashboard-title {
+    font-size: 2.8rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 0.5rem;
+}
+
+/* Petit widget heure */
+.dashboard-welcome {
+    font-size: 1rem;
+    color: #555;
+    margin-bottom: 2rem;
+}
+
+/* Grille de tuiles */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    width: 100%;
+}
+
+/* Tuile individuelle */
+.tile {
+    background: #927ca6;
+    color: #fff;
+    border-radius: 0.75rem;
+    padding: 2rem 1.5rem;
+    text-align: center;
+    position: relative;
+    transition: transform .3s, box-shadow .3s;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 220px;
+}
+.tile:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+.tile i {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+}
+.tile h3 {
+    font-size: 1.3rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+.tile p {
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+}
+.tile a {
+    display: inline-block;
+    padding: 0.4rem 1rem;
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    border-radius: .375rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background .2s;
+}
+.tile a:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+@media (min-width: 992px) {
+    .tile {
+        min-height: 250px;
+    }
+}
+</style>
+
+<script>
+function updateClock() {
+    const now = new Date();
+    const clock = document.getElementById('clock');
+    clock.textContent = now.toLocaleTimeString();
+}
+setInterval(updateClock, 1000);
+updateClock();
+</script>
 @endsection

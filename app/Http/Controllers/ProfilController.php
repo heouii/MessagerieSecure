@@ -24,7 +24,6 @@ class ProfilController extends Controller
     {
         $user = Auth::user();
 
-        // Mise à jour des infos de base avec les mêmes règles que RegisterController
         $request->validate([
             'prenom' => 'required|string|max:255',
             'nom'   => 'required|string|max:255',
@@ -38,7 +37,6 @@ class ProfilController extends Controller
         $user->nom    = $request->input('nom');
         $user->tel    = $request->input('tel');
 
-        // Gestion de la question secrète (MAJ SEULEMENT SI une réponse est saisie)
         if ($request->filled('security_answer')) {
             if (!$request->filled('security_password') || !Hash::check($request->security_password, $user->password)) {
                 return redirect()->route('profil.show')->with('security_error', 'Mot de passe incorrect pour changer la question secrète.');
@@ -50,7 +48,6 @@ class ProfilController extends Controller
             session()->flash('security_success', 'Question de sécurité mise à jour.');
         }
 
-        // Gestion du mot de passe avec les mêmes règles que RegisterController
         if (
             $request->filled('current_password') ||
             $request->filled('new_password') ||

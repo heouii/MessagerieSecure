@@ -11,7 +11,7 @@ class UserController extends Controller
     public function index()
     {
 
-        $users = User::where('email', '!=', 'micael.test@missive-si.fr')->get();
+        $users = User::where('email', '!=', 'micael.adm@mg.missive-si.fr')->get();
         return view('admin.users', compact('users'));
     }
 

@@ -1,17 +1,16 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container mt-4">
-    <h1 class="mb-4">Tableau de bord Administrateur</h1>
+<div class="container py-4">
+    <h1 class="mb-4 fw-bold">Tableau de bord Administrateur</h1>
 
-    <!-- Statistiques -->
-    <div class="row mb-4 g-3">
+    <div class="row g-3 mb-4">
         @php
             $stats = [
-                ['label' => 'Utilisateurs inscrits', 'value' => $totalUsers, 'icon' => 'fas fa-users', 'color' => '#BAA8D3', 'link' => route('admin.users')],
-                ['label' => 'Admins', 'value' => $totalAdmins, 'icon' => 'fas fa-user-shield', 'color' => '#BAA8D3'],
-                ['label' => 'Messages envoyés', 'value' => $totalMessages, 'icon' => 'fas fa-envelope', 'color' => '#BAA8D3'],
-                ['label' => 'Utilisateurs bloqués', 'value' => $blockedUsersCount, 'icon' => 'fas fa-user-lock', 'color' => '#BAA8D3', 'link' => route('admin.users')],
+                ['label' => 'Utilisateurs inscrits', 'value' => $totalUsers, 'icon' => 'fas fa-users', 'color' => '#B39DDB', 'link' => route('admin.users')],
+                ['label' => 'Admins', 'value' => $totalAdmins, 'icon' => 'fas fa-user-shield', 'color' => '#9575CD'],
+                ['label' => 'Messages envoyés', 'value' => $totalMessages, 'icon' => 'fas fa-envelope', 'color' => '#7986CB'],
+                ['label' => 'Utilisateurs bloqués', 'value' => $blockedUsersCount, 'icon' => 'fas fa-user-lock', 'color' => '#CE93D8', 'link' => route('admin.users')],
             ];
         @endphp
 
@@ -20,14 +19,12 @@
             @if (isset($stat['link']))
                 <a href="{{ $stat['link'] }}" class="text-decoration-none">
             @endif
-            <div class="card shadow-sm" style="background-color: {{ $stat['color'] }}; color: white; cursor: {{ isset($stat['link']) ? 'pointer' : 'default' }};">
+            <div class="card shadow-sm border-0 text-white h-100" style="background: {{ $stat['color'] }};">
                 <div class="card-body d-flex align-items-center gap-3">
-                    <div class="fs-2">
-                        <i class="{{ $stat['icon'] }}"></i>
-                    </div>
+                    <div class="fs-2"><i class="{{ $stat['icon'] }}"></i></div>
                     <div>
-                        <h5 class="card-title mb-1">{{ $stat['label'] }}</h5>
-                        <p class="card-text fs-3 fw-bold m-0">{{ $stat['value'] }}</p>
+                        <h5 class="mb-1">{{ $stat['label'] }}</h5>
+                        <p class="fs-3 fw-bold m-0">{{ $stat['value'] }}</p>
                     </div>
                 </div>
             </div>
@@ -38,121 +35,157 @@
         @endforeach
     </div>
 
-    <!-- Graphiques -->
-    <div class="row mb-4">
-        <div class="col-md-8 mx-auto">
-            <div class="card shadow-sm">
-                <div class="card-header bg-light fw-bold">Inscriptions récentes</div>
-                <div class="card-body">
-                    <canvas id="userChart" style="max-height: 300px;"></canvas>
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-bold bg-light">Inscriptions récentes</div>
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <canvas id="chartRegistrations" style="max-height: 250px; width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-bold bg-light">Répartition des rôles</div>
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <canvas id="chartRoles" style="max-height: 250px; width: 100%;"></canvas>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Derniers inscrits -->
-    <div class="row">
-        <div class="col-md-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-                    <span>Derniers inscrits</span>
-                    <input type="text" id="searchUser" class="form-control form-control-sm w-auto" placeholder="Rechercher...">
-                </div>
-                <div class="card-body table-responsive p-0" style="max-height: 400px;">
-                    <table class="table table-hover table-striped mb-0">
-                        <thead class="table-light sticky-top">
-                            <tr>
-                                <th>Nom</th>
-                                <th>Email</th>
-                                <th>Téléphone</th>
-                                <th>Date d'inscription</th>
-                            </tr>
-                        </thead>
-                        <tbody id="userTableBody">
-                            @foreach ($recentUsers as $user)
-                                <tr>
-                                    <td>{{ $user->prenom }} {{ $user->nom }}</td>
-                                    <td>{{ $user->email }}</td>
-                                    <td>{{ $user->tel }}</td>
-                                    <td>{{ $user->created_at->format('d/m/Y H:i') }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-bold bg-light">Spams détectés par type</div>
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <canvas id="chartSpams" style="max-height: 250px; width: 100%;"></canvas>
                 </div>
             </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-bold bg-light">Comptes supprimés sur 7 jours</div>
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <canvas id="chartDeleted" style="max-height: 250px; width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+            <span>Derniers inscrits</span>
+            <input type="text" id="searchUser" class="form-control form-control-sm w-auto" placeholder="Rechercher...">
+        </div>
+        <div class="table-responsive" style="max-height: 400px;">
+            <table class="table table-hover mb-0">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th>Nom</th>
+                        <th>Email</th>
+                        <th>Téléphone</th>
+                        <th>Date d'inscription</th>
+                    </tr>
+                </thead>
+                <tbody id="userTableBody">
+                    @foreach ($recentUsers as $user)
+                    <tr>
+                        <td>{{ $user->prenom }} {{ $user->nom }}</td>
+                        <td>{{ $user->email }}</td>
+                        <td>{{ $user->tel }}</td>
+                        <td>{{ $user->created_at->format('d/m/Y H:i') }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const ctx = document.getElementById('userChart').getContext('2d');
-    const userChart = new Chart(ctx, {
+    const labels = {!! json_encode($chartLabels) !!};
+    const data = {!! json_encode($chartData) !!};
+
+    new Chart(document.getElementById('chartRegistrations'), {
         type: 'line',
         data: {
-            labels: {!! json_encode($chartLabels) !!},
+            labels: labels,
             datasets: [{
                 label: 'Inscriptions par jour',
-                data: {!! json_encode($chartData) !!},
-                borderColor: '#7D67A6',
-                backgroundColor: 'rgba(186, 168, 211, 0.5)',
+                data: data,
+                borderColor: '#7E57C2',
+                backgroundColor: 'rgba(126,87,194,0.3)',
                 tension: 0.4,
                 fill: true,
-                pointRadius: 4,
-                pointHoverRadius: 6,
+                pointRadius: 4
             }]
         },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: false } },
-            scales: {
-                x: { grid: { display: false } },
-                y: { beginAtZero: true }
-            }
-        }
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
     });
 
-    // Recherche dans la table derniers inscrits
+    new Chart(document.getElementById('chartRoles'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Utilisateurs', 'Admins'],
+            datasets: [{
+                data: [{{ $totalUsers - $totalAdmins }}, {{ $totalAdmins }}],
+                backgroundColor: ['#BA68C8', '#9575CD']
+            }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } } }
+    });
+
+    new Chart(document.getElementById('chartSpams'), {
+        type: 'radar',
+        data: {
+            labels: ['Phishing', 'Publicité', 'Malware', 'Autres'],
+            datasets: [{
+                label: 'Spams détectés',
+                backgroundColor: 'rgba(206,147,216,0.2)',
+                borderColor: '#CE93D8',
+                pointBackgroundColor: '#CE93D8'
+            }]
+        },
+        options: { scales: { r: { beginAtZero: true } } }
+    });
+
+    new Chart(document.getElementById('chartDeleted'), {
+        type: 'bar',
+        data: {
+            labels: ['Jour 1', 'Jour 2', 'Jour 3', 'Jour 4', 'Jour 5', 'Jour 6', 'Jour 7'],
+            datasets: [{
+                label: 'Comptes supprimés',
+                backgroundColor: '#B39DDB'
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+    });
+
     document.getElementById('searchUser').addEventListener('input', function() {
         const search = this.value.toLowerCase();
-        const rows = document.querySelectorAll('#userTableBody tr');
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            row.style.display = text.includes(search) ? '' : 'none';
+        document.querySelectorAll('#userTableBody tr').forEach(row => {
+            row.style.display = row.textContent.toLowerCase().includes(search) ? '' : 'none';
         });
     });
 </script>
 
 <style>
-    /* Scroll barre table */
+    .card { border-radius: 0.6rem; }
+    .card .card-body { min-height: 250px; }
+    thead.sticky-top { z-index: 2; }
     .table-responsive {
         scrollbar-width: thin;
-        scrollbar-color: #BAA8D3 transparent;
+        scrollbar-color: #B39DDB transparent;
     }
     .table-responsive::-webkit-scrollbar {
         width: 8px;
         height: 8px;
     }
     .table-responsive::-webkit-scrollbar-thumb {
-        background-color: #BAA8D3;
+        background-color: #B39DDB;
         border-radius: 4px;
-    }
-    .table-responsive::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    /* Cards shadow douce */
-    .card {
-        border-radius: 10px;
-    }
-
-    /* Sticky table header */
-    thead.table-light {
-        position: sticky;
-        top: 0;
-        z-index: 10;
     }
 </style>
 @endsection

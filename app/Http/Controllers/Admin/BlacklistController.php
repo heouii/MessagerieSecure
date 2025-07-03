@@ -23,7 +23,22 @@ class BlacklistController extends Controller
     {
         $request->validate([
             'type' => 'required|in:email,domain',
-            'value' => 'required|string|unique:blacklists,value',
+            'value' => [
+                'required',
+                'string',
+                'unique:blacklists,value',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($request->type === 'domain') {
+                        if (!filter_var($value, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
+                            $fail("La valeur doit être un domaine valide (ex: exemple.com).");
+                        }
+                    } elseif ($request->type === 'email') {
+                        if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                            $fail("La valeur doit être une adresse email valide.");
+                        }
+                    }
+                }
+            ],
         ]);
 
         Blacklist::create($request->only('type', 'value'));
@@ -40,7 +55,22 @@ class BlacklistController extends Controller
     {
         $request->validate([
             'type' => 'required|in:email,domain',
-            'value' => 'required|string|unique:blacklists,value,' . $blacklist->id,
+            'value' => [
+                'required',
+                'string',
+                'unique:blacklists,value,' . $blacklist->id,
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($request->type === 'domain') {
+                        if (!filter_var($value, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
+                            $fail("La valeur doit être un domaine valide (ex: exemple.com).");
+                        }
+                    } elseif ($request->type === 'email') {
+                        if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                            $fail("La valeur doit être une adresse email valide.");
+                        }
+                    }
+                }
+            ],
         ]);
 
         $blacklist->update($request->only('type', 'value'));

@@ -332,23 +332,24 @@ class MailgunController extends Controller
         try {
             Log::info('🔥 Webhook Mailgun reçu', $request->all());
             
-            // Vérification de la signature Mailgun réactivée
-            if (!$this->verifyWebhookSignature($request)) {
-                return response()->json(['error' => 'Signature invalide'], 401);
-            }
+            // Vérifier la signature
+            $isSignatureValid = $this->verifyWebhookSignature($request);
+            
+            // Déterminer le dossier selon la signature
+            $folder = $isSignatureValid ? 'inbox' : 'unverified';
+            
+            Log::info('🔐 Signature vérifiée', [
+                'valid' => $isSignatureValid,
+                'folder' => $folder
+            ]);
 
+            // Extraire les données
             $from = $request->input('From') ?? $request->input('from');
             $to = $request->input('To') ?? $request->input('to');
             $subject = $request->input('Subject') ?? $request->input('subject') ?? 'Sans objet';
             $bodyPlain = $request->input('body-plain') ?? '';
             $bodyHtml = $request->input('body-html') ?? '';
             
-            Log::info('📧 Données extraites', [
-                'from' => $from,
-                'to' => $to,
-                'subject' => $subject
-            ]);
-
             // Trouver l'utilisateur
             $userId = $this->findUserByEmail($to);
             
@@ -357,10 +358,10 @@ class MailgunController extends Controller
                 return response()->json(['error' => 'Destinataire non trouvé'], 404);
             }
 
-            // Créer l'email
+            // Créer l'email avec le bon dossier
             $email = Email::create([
                 'user_id' => $userId,
-                'folder' => 'inbox',
+                'folder' => $folder, // 'inbox' ou 'unverified'
                 'from_email' => $this->extractEmail($from),
                 'from_name' => $this->extractName($from) ?? $this->extractEmail($from),
                 'to_email' => $this->extractEmail($to),
@@ -369,11 +370,21 @@ class MailgunController extends Controller
                 'preview' => substr($bodyPlain ?: strip_tags($bodyHtml), 0, 100),
                 'is_html' => !empty($bodyHtml),
                 'is_read' => false,
+                'signature_verified' => $isSignatureValid, // Nouveau champ
             ]);
 
-            Log::info('✅ Email sauvegardé', ['email_id' => $email->id]);
+            Log::info('✅ Email sauvegardé', [
+                'email_id' => $email->id,
+                'folder' => $folder,
+                'signature_valid' => $isSignatureValid
+            ]);
 
-            return response()->json(['success' => true, 'email_id' => $email->id]);
+            return response()->json([
+                'success' => true, 
+                'email_id' => $email->id,
+                'folder' => $folder,
+                'signature_verified' => $isSignatureValid
+            ]);
 
         } catch (\Exception $e) {
             Log::error('💥 Erreur webhook', [
@@ -389,37 +400,43 @@ class MailgunController extends Controller
      */
     private function verifyWebhookSignature(Request $request): bool
     {
-        $timestamp = $request->input('timestamp');
-        $token = $request->input('token');
-        $signature = $request->input('signature');
-        
-        if (!$timestamp || !$token || !$signature) {
-            Log::warning('Webhook Mailgun: paramètres de signature manquants');
-            return false;
-        }
-        
-        // Vérifier que le timestamp n'est pas trop ancien (15 minutes max)
-        if (abs(time() - $timestamp) > 900) {
-            Log::warning('Webhook Mailgun: timestamp trop ancien');
-            return false;
-        }
-        
-        $expectedSignature = hash_hmac(
-            'sha256',
-            $timestamp . $token,
-            $this->mailgunSecret
-        );
-        
-        $isValid = hash_equals($signature, $expectedSignature);
-        
-        if (!$isValid) {
-            Log::warning('Webhook Mailgun: signature invalide', [
-                'expected' => $expectedSignature,
-                'received' => $signature
+        try {
+            $timestamp = $request->input('timestamp');
+            $token = $request->input('token');
+            $signature = $request->input('signature');
+            
+            if (!$timestamp || !$token || !$signature) {
+                Log::info('🔐 Paramètres de signature manquants');
+                return false; // ⚠️ Retourner false, ne pas lever d'erreur
+            }
+            
+            // Vérifier que le timestamp n'est pas trop ancien (15 minutes max)
+            if (abs(time() - $timestamp) > 900) {
+                Log::info('🔐 Timestamp trop ancien');
+                return false;
+            }
+            
+            $expectedSignature = hash_hmac(
+                'sha256',
+                $timestamp . $token,
+                $this->mailgunSecret
+            );
+            
+            $isValid = hash_equals($signature, $expectedSignature);
+            
+            Log::info('🔐 Vérification signature', [
+                'valid' => $isValid,
+                'has_timestamp' => !empty($timestamp),
+                'has_token' => !empty($token),
+                'has_signature' => !empty($signature)
             ]);
+            
+            return $isValid;
+            
+        } catch (\Exception $e) {
+            Log::error('🔐 Erreur vérification signature', ['error' => $e->getMessage()]);
+            return false; // ⚠️ En cas d'erreur, considérer comme non vérifié
         }
-        
-        return $isValid;
     }
 
     /**

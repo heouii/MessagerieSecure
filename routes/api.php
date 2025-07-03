@@ -26,6 +26,16 @@ Route::prefix('mailgun')->middleware(['auth'])->group(function () {
     Route::post('/emails/{emailId}/read', [MailgunController::class, 'markEmailAsRead']);
     Route::delete('/emails/{emailId}', [MailgunController::class, 'deleteEmail']);
     Route::post('/create-demo', [MailgunController::class, 'createDemoEmails']);
+
+    // NOUVELLES ROUTES pour les fonctionnalités ajoutées
+    Route::get('/emails/{emailId}/reply', [MailgunController::class, 'replyToEmail'])
+        ->name('mailgun.email.reply');
+
+    Route::get('/email-history', [MailgunController::class, 'getEmailHistory'])
+        ->name('mailgun.email.history');
+
+    Route::get('/email-suggestions', [MailgunController::class, 'getEmailSuggestions'])
+        ->name('mailgun.email.suggestions');
 });
 
 // Webhook sans auth (reste à l'extérieur)

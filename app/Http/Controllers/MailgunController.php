@@ -826,4 +826,154 @@ private function buildCurlCommand(string $url, array $emailData, array $attachme
             abort(500, 'Erreur lors du téléchargement');
         }
     }
+    /**
+     * Répondre à un email
+     */
+    public function replyToEmail(Request $request, $emailId): JsonResponse
+    {
+        try {
+            $originalEmail = Email::where('user_id', auth()->id())->findOrFail($emailId);
+            
+            // Préparer les données de réponse
+            $replyData = [
+                'to' => $originalEmail->from_email,
+                'subject' => 'Re: ' . preg_replace('/^Re: /', '', $originalEmail->subject),
+                'original_email' => [
+                    'id' => $originalEmail->id,
+                    'from' => $originalEmail->from_email,
+                    'from_name' => $originalEmail->from_name,
+                    'date' => $originalEmail->created_at->format('d/m/Y H:i'),
+                    'subject' => $originalEmail->subject,
+                    'content' => $originalEmail->content
+                ]
+            ];
+            
+            return response()->json([
+                'success' => true,
+                'reply_data' => $replyData
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Erreur préparation réponse', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur lors de la préparation de la réponse'], 500);
+        }
+    }
+
+    /**
+     * Rechercher les emails précédents avec un destinataire
+     */
+    public function getEmailHistory(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 422);
+        }
+
+        try {
+            $targetEmail = $request->email;
+            
+            // Chercher les emails envoyés ou reçus avec cette adresse
+            $emailHistory = Email::where('user_id', auth()->id())
+                ->where(function($query) use ($targetEmail) {
+                    $query->where('to_email', $targetEmail)
+                          ->orWhere('from_email', $targetEmail);
+                })
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get()
+                ->map(function($email) {
+                    return [
+                        'id' => $email->id,
+                        'subject' => $email->subject,
+                        'date' => $email->created_at->format('d/m/Y H:i'),
+                        'folder' => $email->folder,
+                        'preview' => $email->preview ?: substr($email->content, 0, 100)
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'history' => $emailHistory,
+                'email' => $targetEmail
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Erreur récupération historique', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur récupération historique'], 500);
+        }
+    }
+
+    /**
+     * Autocomplétion des adresses email
+     */
+    public function getEmailSuggestions(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'query' => 'required|string|min:1'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 422);
+        }
+
+        try {
+            $query = $request->query;
+            
+            // Chercher dans les emails envoyés et reçus
+            $suggestions = Email::where('user_id', auth()->id())
+                ->where(function($emailQuery) use ($query) {
+                    $emailQuery->where('to_email', 'like', "%{$query}%")
+                              ->orWhere('from_email', 'like', "%{$query}%")
+                              ->orWhere('from_name', 'like', "%{$query}%");
+                })
+                ->select('to_email', 'from_email', 'from_name', 'to_name')
+                ->distinct()
+                ->limit(10)
+                ->get();
+
+            // Formater les suggestions
+            $formattedSuggestions = collect();
+            
+            foreach ($suggestions as $email) {
+                // Ajouter l'email de destination s'il match
+                if ($email->to_email && stripos($email->to_email, $query) !== false) {
+                    $formattedSuggestions->push([
+                        'email' => $email->to_email,
+                        'name' => $email->to_name ?: null,
+                        'display' => $email->to_name ? "{$email->to_name} <{$email->to_email}>" : $email->to_email,
+                        'type' => 'sent_to'
+                    ]);
+                }
+                
+                // Ajouter l'email expéditeur s'il match
+                if ($email->from_email && stripos($email->from_email, $query) !== false) {
+                    $formattedSuggestions->push([
+                        'email' => $email->from_email,
+                        'name' => $email->from_name ?: null,
+                        'display' => $email->from_name ? "{$email->from_name} <{$email->from_email}>" : $email->from_email,
+                        'type' => 'received_from'
+                    ]);
+                }
+            }
+
+            // Supprimer les doublons et limiter
+            $uniqueSuggestions = $formattedSuggestions
+                ->unique('email')
+                ->take(8)
+                ->values();
+
+            return response()->json([
+                'success' => true,
+                'suggestions' => $uniqueSuggestions,
+                'query' => $query
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Erreur autocomplétion', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur autocomplétion'], 500);
+        }
+    }
 }

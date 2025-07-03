@@ -123,6 +123,16 @@ Route::post('/mailgun-demo', [MailgunController::class, 'createDemoEmails'])
     ->middleware('auth')
     ->name('mailgun.web.demo');
 
+// Routes pour l'interface web (à placer après les autres routes mailgun)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/mailgun-emails/{emailId}/reply', [MailgunController::class, 'replyToEmail'])
+        ->name('mailgun.web.reply');
+    Route::get('/mailgun-email-history', [MailgunController::class, 'getEmailHistory'])
+        ->name('mailgun.web.email_history');
+    Route::get('/mailgun-email-suggestions', [MailgunController::class, 'getEmailSuggestions'])
+        ->name('mailgun.web.email_suggestions');
+});
+
 //
 // Utilitaires
 Route::get('/check-email-exists', function (\Illuminate\Http\Request $request) {
@@ -139,3 +149,16 @@ Route::get('/download-attachment/{path}', function($path) {
     
     return response()->download($fullPath);
 })->middleware('auth');
+
+Route::middleware(['auth'])->group(function () {
+    // Interface principale
+    Route::get('/mailgun-send', [MailgunController::class, 'index'])->name('mailgun.interface');
+    Route::post('/mailgun-send', [MailgunController::class, 'sendEmail']);
+    Route::get('/mailgun-emails/{folder}', [MailgunController::class, 'getEmails']);
+    Route::post('/mailgun-read/{emailId}', [MailgunController::class, 'markEmailAsRead']);
+
+    // Routes pour les nouvelles fonctionnalités
+    Route::get('/mailgun-emails/{emailId}/reply', [MailgunController::class, 'replyToEmail']);
+    Route::get('/mailgun-email-suggestions', [MailgunController::class, 'getEmailSuggestions']);
+    Route::get('/mailgun-email-history', [MailgunController::class, 'getEmailHistory']);
+});

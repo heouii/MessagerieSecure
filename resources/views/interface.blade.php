@@ -205,6 +205,11 @@
                         <i class="fas fa-trash mr-3" style="color: #9280A3;"></i>
                         <span>Corbeille</span>
                     </div>
+                    <div class="sidebar-item flex items-center px-4 py-3 text-gray-700 cursor-pointer" data-view="spam">
+                        <i class="fas fa-ban mr-3 text-red-500"></i>
+                        <span>Spam</span>
+                        <span id="spamCount" class="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full">0</span>
+                    </div>
                 </div>
             </nav>
 
@@ -426,6 +431,7 @@
                 const titles = {
                     'inbox': 'Boîte de réception',
                     'unverified': 'À vérifier',
+                    'spam': 'Spam', 
                     'sent': 'Envoyés',
                     'drafts': 'Brouillons',
                     'trash': 'Corbeille'
@@ -575,7 +581,11 @@
             `;
             
             try {
-                const response = await fetch(`/mailgun-emails/${currentView}?search=${encodeURIComponent(search)}`, {
+                const endpoint = currentView === 'spam' 
+    ? `/emails/folder/spam?search=${encodeURIComponent(search)}`
+    : `/mailgun-emails/${currentView}?search=${encodeURIComponent(search)}`;
+    
+const response = await fetch(endpoint, {
 
                     headers: {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
@@ -589,9 +599,11 @@
                     const emptyMessages = {
                         'inbox': 'Aucun message dans la boîte de réception',
                         'unverified': 'Aucun message à vérifier',
+                         'spam': 'Aucun spam détecté',
                         'sent': 'Aucun message envoyé',
                         'drafts': 'Aucun brouillon',
-                        'trash': 'Corbeille vide'
+                        'trash': 'Corbeille vide',
+                        'spam': 'Aucun message indésirable'
                     };
                     
                     emailList.innerHTML = `
@@ -627,7 +639,7 @@
         async function updateCounters() {
             try {
                 // Charger tous les dossiers pour les compteurs
-                const folders = ['inbox', 'unverified'];
+                const folders = ['inbox', 'unverified', 'spam'];
                 
                 for (const folder of folders) {
                     const response = await fetch(`/mailgun-emails/${folder}`, {
@@ -644,7 +656,18 @@
                     } else if (folder === 'unverified') {
                         const unverifiedCount = emails.filter(e => !e.read).length;
                         document.getElementById('unverifiedCount').textContent = unverifiedCount;
-                    }
+                   } else if (folder === 'spam') {
+    // Pour le spam, on doit faire une requête séparée car c'est un endpoint différent
+    const spamResponse = await fetch(`/emails/folder/spam`, {
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        }
+    });
+    const spamData = await spamResponse.json();
+    const spamEmails = spamData.emails || [];
+    const spamCount = spamEmails.filter(e => !e.read).length;
+    document.getElementById('spamCount').textContent = spamCount;
+}
                 }
             } catch (error) {
                 console.error('Erreur mise à jour compteurs:', error);

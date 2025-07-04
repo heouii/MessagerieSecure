@@ -29,15 +29,25 @@ class Email extends Model
         'read_at',
         'attachments',
         'metadata',
+	'signature_verified',
+    'is_spam',
+    'spam_probability',
+    'spam_confidence',
+    'spam_checked_at',
+    'spam_details',
     ];
 
     protected $casts = [
         'is_html' => 'boolean',
         'is_read' => 'boolean',
         'is_starred' => 'boolean',
+		'signature_verified' => 'boolean',  // AJOUTER
+    'is_spam' => 'boolean', 
         'read_at' => 'datetime',
+	'spam_checked_at' => 'datetime',
         'attachments' => 'array',
         'metadata' => 'array',
+	'spam_details' => 'array', 
     ];
 
     // Relations

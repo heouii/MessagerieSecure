@@ -5,11 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Messagerie Sécurisée</title>
-    
-    <!-- Bootstrap 5 CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     
@@ -25,7 +21,7 @@
         }
         body {
             background-color: #f8f9fa;
-            padding-top: 56px; /* Pour compenser la navbar fixe */
+            padding-top: 56px;
         }
         .sidebar {
             min-height: 100vh;
@@ -104,52 +100,47 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.8; }
         }
+    .autocomplete-container {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+    }
 
-        /* === Autocomplétion & historique === */
-.autocomplete-container {
-    position: relative;
-    display: inline-block;
-    width: 100%;
-}
+    .autocomplete-suggestions {
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        background-color: white;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+        margin-top: 0.25rem;
+    }
 
-.autocomplete-suggestions {
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
-    background-color: white;
-    max-height: 200px;
-    overflow-y: auto;
-    z-index: 1000;
-    margin-top: 0.25rem;
-}
+    .autocomplete-suggestion {
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+    }
 
-.autocomplete-suggestion {
-    padding: 0.5rem 1rem;
-    cursor: pointer;
-}
+    .autocomplete-suggestion:hover {
+        background-color: #f1f5f9;
+    }
+    #notifications {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        z-index: 9999;
+        pointer-events: none; 
+    }
 
-.autocomplete-suggestion:hover {
-    background-color: #f1f5f9;
-}
-
-/* Notifications positionnées sous le header et toujours visibles */
-#notifications {
-    position: fixed;
-    top: 80px; /* Plus bas que le header */
-    right: 20px;
-    z-index: 9999; /* Z-index très élevé */
-    pointer-events: none; /* Pour ne pas bloquer les clics */
-}
-
-#notifications > div {
-    pointer-events: auto; /* Restaurer les clics sur les notifications */
-    margin-bottom: 10px;
-    min-width: 300px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-}
+    #notifications > div {
+        pointer-events: auto;
+        margin-bottom: 10px;
+        min-width: 300px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    }
     </style>
 </head>
 <body>
-    <!-- Navbar top (only when authenticated) -->
     @auth
     <nav class="navbar navbar-dark">
         <div class="container-fluid">
@@ -166,7 +157,6 @@
         </div>
     </nav>
     @else
-    <!-- Navbar for guests -->
     <nav class="navbar navbar-expand-lg navbar-light">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url('/') }}">
@@ -179,20 +169,16 @@
         </div>
     </nav>
     @endauth
-    <div class="flex h-screen"> <!-- Supprimé le padding -->
-        
-        <!-- Sidebar -->
+    <div class="flex h-screen"> 
+
         <div class="w-64 bg-white shadow-lg border-r border-gray-200">
-            <!-- Supprimé complètement le bloc titre MessagerieSecure -->
-            
-            <!-- Bouton Composer -->
+
             <div class="p-4">
                 <button id="composeBtn" class="w-full text-white font-medium py-3 px-4 rounded-lg transition-colors" style="background-color: #BAA8D3;" onmouseover="this.style.backgroundColor='#9280A3'" onmouseout="this.style.backgroundColor='#BAA8D3'">
                     <i class="fas fa-pen mr-2"></i>Nouveau message
                 </button>
             </div>
-            
-            <!-- Menu Navigation -->
+
             <nav class="flex-1">
                 <div class="px-2">
                     <div class="sidebar-item active flex items-center px-4 py-3 text-gray-700 cursor-pointer" data-view="inbox">
@@ -200,8 +186,7 @@
                         <span>Boîte de réception</span>
                         <span id="inboxCount" class="ml-auto text-white text-xs px-2 py-1 rounded-full" style="background-color: #BAA8D3;">0</span>
                     </div>
-                    
-                    <!-- NOUVEAU : Dossier À vérifier -->
+
                     <div class="sidebar-item unverified flex items-center px-4 py-3 text-gray-700 cursor-pointer" data-view="unverified">
                         <i class="fas fa-exclamation-triangle mr-3 text-orange-500 pulse-orange"></i>
                         <span>À vérifier</span>
@@ -222,8 +207,7 @@
                     </div>
                 </div>
             </nav>
-            
-            <!-- User Info -->
+
             <div class="p-4 border-t border-gray-200">
                 <div class="flex items-center">
                     <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium" style="background-color: #BAA8D3;">
@@ -235,12 +219,17 @@
                     </div>
                 </div>
             </div>
+                <a href="{{ route('dashboard') }}"
+                    class="block w-full text-center text-white font-medium py-2 px-4 rounded transition-colors"
+                    style="background-color: #BAA8D3;"
+                    onmouseover="this.style.backgroundColor='#9280A3';"
+                    onmouseout="this.style.backgroundColor='#BAA8D3';">
+                        <i class="fas fa-arrow-left mr-1"></i> Retour au tableau de bord
+                </a>
         </div>
-        
-        <!-- Zone principale -->
+
         <div class="flex-1 flex flex-col">
-            
-            <!-- Header -->
+
             <div class="bg-white border-b border-gray-200 px-6 py-4">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center space-x-4">
@@ -258,11 +247,9 @@
                     </div>
                 </div>
             </div>
-            
-            <!-- Liste des emails -->
+
             <div class="flex-1 overflow-y-auto">
                 <div id="emailList" class="divide-y divide-gray-200">
-                    <!-- Les emails seront chargés ici dynamiquement -->
                     <div class="p-8 text-center text-gray-500">
                         <i class="fas fa-inbox text-4xl mb-4"></i>
                         <p>Chargement des messages...</p>
@@ -271,11 +258,9 @@
             </div>
         </div>
     </div>
-    
-    <!-- Modal Composer -->
     <div id="composeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
         <div class="flex items-center justify-center h-full p-4">
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-screen overflow-y-auto">
                 <div class="flex items-center justify-between p-4 border-b border-gray-200">
                     <h3 class="text-lg font-semibold text-gray-800">Nouveau message</h3>
                     <button id="closeComposeBtn" class="text-gray-500 hover:text-gray-700">
@@ -310,7 +295,6 @@
                                   class="w-full h-48 px-3 py-2 border border-gray-300 rounded resize-none mb-4" style="--tw-ring-color: #BAA8D3;" onfocus="this.style.borderColor='#9280A3'" onblur="this.style.borderColor='#BAA8D3'"
                                   placeholder="Écrivez votre message ici..."></textarea>
                         
-                        <!-- Pièces jointes -->
                         <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center" id="attachmentZone" style="transition: border-color 0.3s;">
                             <input type="file" id="attachmentInput" multiple class="hidden" accept="*/*">
                             <div id="attachmentPlaceholder">
@@ -348,8 +332,7 @@
             </div>
         </div>
     </div>
-    
-    <!-- Modal Lecture -->
+
     <div id="readModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
         <div class="flex items-center justify-center h-full p-4">
             <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
@@ -364,6 +347,12 @@
                         </button>
                         <button id="deleteEmailBtn" class="text-red-600 hover:text-red-700">
                             <i class="fas fa-trash mr-1"></i>Supprimer
+                        </button>
+                        <button id="restoreEmailBtn" class="text-green-600 hover:text-green-700 hidden">
+                            <i class="fas fa-undo mr-1"></i>Restaurer
+                        </button>
+                        <button id="verifyEmailBtn" class="text-green-600 hover:text-green-700 hidden">
+                            <i class="fas fa-check-circle mr-1"></i> Valider
                         </button>
                         <button id="closeReadBtn" class="text-gray-500 hover:text-gray-700">
                             <i class="fas fa-times"></i>
@@ -385,8 +374,7 @@
                 
                 <div class="p-6 flex-1 overflow-y-auto max-h-96">
                     <div id="readContent" class="prose max-w-none"></div>
-                    
-                    <!-- Pièces jointes reçues -->
+
                     <div id="emailAttachments" class="mt-4 hidden">
                         <h4 class="text-sm font-semibold text-gray-700 mb-2">
                             <i class="fas fa-paperclip mr-1"></i>Pièces jointes
@@ -397,16 +385,15 @@
             </div>
         </div>
     </div>
-    
-    <!-- Notifications -->
+
     <div id="notifications" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
     <script>
-        // Configuration
+   
         const API_BASE = '';
         let currentView = 'inbox';
         let currentEmails = [];
-        let attachedFiles = []; // Nouveau : stockage des fichiers
+        let attachedFiles = []; 
         let isReplying = false;
         let originalEmailData = null;
 
@@ -579,7 +566,7 @@
         });
         
         // Charger les emails
-        async function loadEmails() {
+        async function loadEmails(search = '') {
             emailList.innerHTML = `
                 <div class="p-8 text-center text-gray-500">
                     <i class="fas fa-spinner fa-spin text-2xl mb-4"></i>
@@ -588,7 +575,8 @@
             `;
             
             try {
-                const response = await fetch(`/mailgun-emails/${currentView}`, {
+                const response = await fetch(`/mailgun-emails/${currentView}?search=${encodeURIComponent(search)}`, {
+
                     headers: {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
                     }
@@ -629,6 +617,12 @@
             }
         }
         
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const query = e.target.value.trim();
+            loadEmails(query);
+        });
+
+        
         // Mettre à jour les compteurs
         async function updateCounters() {
             try {
@@ -668,7 +662,7 @@
                 
                 return `
                     <div class="email-item ${!email.read ? 'unread' : ''} ${securityClass} p-4 cursor-pointer border-b border-gray-100 hover:bg-gray-50" 
-                         data-email-id="${email.id}" style="transition: background-color 0.2s;">
+                        data-email-id="${email.id}" style="transition: background-color 0.2s;">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center space-x-4 flex-1">
                                 <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium" style="background: linear-gradient(to right, #BAA8D3, #9280A3);">
@@ -688,6 +682,20 @@
                                         `<p class="text-xs text-gray-500 mt-1">
                                             <i class="fas fa-paperclip mr-1"></i>${Array.isArray(email.attachments) ? email.attachments.length : '1'} pièce(s) jointe(s)
                                         </p>` : ''}
+
+                                    <!-- BOUTONS Brouillons -->
+                                    ${currentView === 'drafts' ? `
+                                        <div class="flex items-center space-x-3 mt-2">
+                                            <button onclick="event.stopPropagation(); loadDraft('${email.id}');" 
+                                                class="text-sm text-purple-600 hover:underline flex items-center">
+                                                <i class="fas fa-edit mr-1"></i> Éditer
+                                            </button>
+                                            <button onclick="event.stopPropagation(); deleteDraft('${email.id}');" 
+                                                class="text-sm text-red-600 hover:underline flex items-center">
+                                                <i class="fas fa-trash mr-1"></i> Supprimer
+                                            </button>
+                                        </div>
+                                    ` : ''}
                                 </div>
                             </div>
                             <div class="flex items-center space-x-2">
@@ -697,6 +705,7 @@
                         </div>
                     </div>
                 `;
+
             }).join('');
             
             // Ajouter les event listeners pour les clics
@@ -721,12 +730,36 @@
             // AJOUTER CETTE LIGNE
             document.getElementById('readModal').dataset.currentEmailId = emailId;
 
-            // Votre code existant...
             const email = currentEmails.find(e => e.id == emailId);
             if (!email) {
                 console.error('Email non trouvé:', emailId);
                 showNotification('Email non trouvé', 'error');
                 return;
+            }
+
+            const verifyBtn = document.getElementById('verifyEmailBtn');
+                if (currentView === 'unverified') {
+                    verifyBtn.classList.remove('hidden');
+                } else {
+                    verifyBtn.classList.add('hidden');
+                }
+
+
+            const restoreBtn = document.getElementById('restoreEmailBtn');
+                if (currentView === 'trash') {
+                    restoreBtn.classList.remove('hidden');
+                } else {
+                    restoreBtn.classList.add('hidden');
+                }
+
+                
+            const deleteBtn = document.getElementById('deleteEmailBtn');
+            if (currentView === 'trash') {
+                deleteBtn.innerHTML = '<i class="fas fa-trash-alt mr-1"></i> Supprimer définitivement';
+                deleteBtn.dataset.action = 'permanent';
+            } else {
+                deleteBtn.innerHTML = '<i class="fas fa-trash mr-1"></i> Supprimer';
+                deleteBtn.dataset.action = 'trash';
             }
 
             document.getElementById('readSubject').textContent = email.subject || 'Sans objet';
@@ -735,7 +768,8 @@
             document.getElementById('readTo').textContent = email.to || 'Destinataire inconnu';
             document.getElementById('readContent').innerHTML = email.content || 'Contenu vide';
 
-            displayEmailAttachments(email.attachments);
+            displayEmailAttachments(email.attachments, email.id);
+
 
             const isVerified = email.signature_verified !== false && currentView !== 'unverified';
             const emailSecurityBadge = document.getElementById('emailSecurityBadge');
@@ -814,65 +848,62 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
         
-        function displayEmailAttachments(attachments) {
-            const emailAttachmentsDiv = document.getElementById('emailAttachments');
-            const attachmentsListDiv = document.getElementById('attachmentsList');
-            
-            // Debug pour voir ce qu'on reçoit
-            console.log('Attachments reçus:', attachments, typeof attachments);
-            
-            if (!attachments) {
-                emailAttachmentsDiv.classList.add('hidden');
-                return;
-            }
-            
-            let attachmentData = [];
-            
-            // Gérer différents formats d'attachments
-            if (typeof attachments === 'string') {
-                try {
-                    attachmentData = JSON.parse(attachments);
-                } catch (e) {
-                    console.error('Erreur parsing attachments:', e);
-                    emailAttachmentsDiv.classList.add('hidden');
-                    return;
-                }
-            } else if (Array.isArray(attachments)) {
-                attachmentData = attachments;
-            } else if (typeof attachments === 'object') {
-                attachmentData = [attachments];
-            }
-            
-            if (!Array.isArray(attachmentData) || attachmentData.length === 0) {
-                emailAttachmentsDiv.classList.add('hidden');
-                return;
-            }
-            
-            emailAttachmentsDiv.classList.remove('hidden');
-            
-            attachmentsListDiv.innerHTML = attachmentData.map(attachment => {
-                // S'assurer que attachment est un objet valide
-                const filename = attachment.filename || attachment.name || 'Fichier sans nom';
-                const size = attachment.size || 0;
-                const attachmentId = attachment.id || attachment.path || '#';
-                
-                return `
-                    <div class="flex items-center justify-between bg-gray-50 p-3 rounded">
-                        <div class="flex items-center space-x-3">
-                            <i class="fas fa-file text-gray-500"></i>
-                            <div>
-                                <p class="text-sm font-medium text-gray-700">${filename}</p>
-                                <p class="text-xs text-gray-500">${formatFileSize(size)}</p>
-                            </div>
-                        </div>
-                        <a href="/download-attachment/${attachmentId}" 
-                           class="text-purple-600 hover:text-purple-800 text-sm">
-                            <i class="fas fa-download mr-1"></i>Télécharger
-                        </a>
-                    </div>
-                `;
-            }).join('');
+function displayEmailAttachments(attachments, emailId) {
+    const emailAttachmentsDiv = document.getElementById('emailAttachments');
+    const attachmentsListDiv = document.getElementById('attachmentsList');
+
+    if (!attachments) {
+        emailAttachmentsDiv.classList.add('hidden');
+        return;
+    }
+
+    let attachmentData = [];
+    if (typeof attachments === 'string') {
+        try {
+            attachmentData = JSON.parse(attachments);
+        } catch (e) {
+            console.error('Erreur parsing attachments:', e);
+            emailAttachmentsDiv.classList.add('hidden');
+            return;
         }
+    } else if (Array.isArray(attachments)) {
+        attachmentData = attachments;
+    } else if (typeof attachments === 'object') {
+        attachmentData = [attachments];
+    }
+
+    if (!Array.isArray(attachmentData) || attachmentData.length === 0) {
+        emailAttachmentsDiv.classList.add('hidden');
+        return;
+    }
+
+    emailAttachmentsDiv.classList.remove('hidden');
+
+    attachmentsListDiv.innerHTML = attachmentData.map((attachment) => {
+        const filename = attachment.filename || 'Fichier';
+        const size = attachment.size || 0;
+
+        return `
+            <div class="flex items-center justify-between bg-gray-50 p-3 rounded">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-file text-gray-500"></i>
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">${filename}</p>
+                        <p class="text-xs text-gray-500">${formatFileSize(size)}</p>
+                    </div>
+                </div>
+                <a href="/storage/incoming_attachments/${encodeURIComponent(attachment.path)}"
+                   class="text-purple-600 hover:text-purple-800 text-sm" target="_blank">
+                    <i class="fas fa-download mr-1"></i>Télécharger
+                </a>
+            </div>
+        `;
+    }).join('');
+}
+
+
+
+
         
         // Marquer comme lu
         async function markAsRead(emailId) {
@@ -962,7 +993,200 @@
                 handleReplyClick();
             }
         });
+
+        document.getElementById('verifyEmailBtn').addEventListener('click', async function(e) {
+            e.preventDefault();
+            const emailId = document.getElementById('readModal').dataset.currentEmailId;
+            if (!emailId) {
+                showNotification('Erreur : email introuvable', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/emails/${emailId}/verify`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json'
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification(data.message, 'success');
+                    document.getElementById('readModal').classList.add('hidden');
+                    loadEmails();
+                } else if (data.need_confirmation) {
+                    // Demande de confirmation supplémentaire
+                    if (confirm(`${data.message}\n\nVoulez-vous vraiment valider cet email ?`)) {
+                        const confirmResponse = await fetch(`/emails/${emailId}/verify`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ force: 1 })
+                        });
+                        const confirmData = await confirmResponse.json();
+                        if (confirmData.success) {
+                            showNotification(confirmData.message, 'success');
+                            document.getElementById('readModal').classList.add('hidden');
+                            loadEmails();
+                        } else {
+                            showNotification(confirmData.error || 'Erreur lors de la confirmation.', 'error');
+                        }
+                    }
+                } else {
+                    showNotification(data.error || 'Erreur lors de la vérification.', 'error');
+                }
+
+            } catch (error) {
+                console.error('Erreur vérification:', error);
+                showNotification('Erreur réseau lors de la vérification.', 'error');
+            }
+        });
+
+
+        document.getElementById('saveDraftBtn').addEventListener('click', async function(e) {
+            e.preventDefault();
+
+            const to = document.getElementById('toField').value;
+            const cc = document.getElementById('ccField').value;
+            const subject = document.getElementById('subjectField').value;
+            const content = document.getElementById('messageField').value;
+
+
+            try {
+                const response = await fetch('/emails/draft', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        to: to,
+                        cc: cc,
+                        subject: subject,
+                        content: content
+                    })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('Brouillon enregistré', 'success');
+                    document.getElementById('composeModal').classList.add('hidden');
+
+                    loadDrafts();
+                } else {
+                    showNotification(data.error || 'Erreur lors de l\'enregistrement du brouillon', 'error');
+                }
+            } catch (error) {
+                console.error('Erreur sauvegarde brouillon:', error);
+                showNotification('Erreur réseau lors de la sauvegarde', 'error');
+            }
+        });
+
         
+        document.getElementById('deleteEmailBtn').addEventListener('click', async function(e) {
+            e.preventDefault();
+
+            const emailId = document.getElementById('readModal').dataset.currentEmailId;
+            if (!emailId) {
+                showNotification('Erreur : email introuvable', 'error');
+                return;
+            }
+
+            const action = this.dataset.action;
+
+            if (action === 'permanent') {
+                if (!confirm('Voulez-vous vraiment supprimer définitivement cet email ? Cette action est irréversible.')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/emails/${emailId}/permanent-delete`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showNotification(data.message, 'success');
+                        document.getElementById('readModal').classList.add('hidden');
+                        loadEmails();
+                    } else {
+                        showNotification(data.error || 'Erreur lors de la suppression', 'error');
+                    }
+                } catch (error) {
+                    console.error('Erreur suppression:', error);
+                    showNotification('Erreur réseau lors de la suppression', 'error');
+                }
+            } else {
+                if (!confirm('Voulez-vous déplacer cet email dans la corbeille ?')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/emails/${emailId}/delete`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showNotification(data.message, 'success');
+                        document.getElementById('readModal').classList.add('hidden');
+                        loadEmails();
+                    } else {
+                        showNotification(data.error || 'Erreur lors de la suppression', 'error');
+                    }
+                } catch (error) {
+                    console.error('Erreur suppression:', error);
+                    showNotification('Erreur réseau lors de la suppression', 'error');
+                }
+            }
+        });
+
+
+        document.getElementById('restoreEmailBtn').addEventListener('click', async function(e) {
+            e.preventDefault();
+            const emailId = document.getElementById('readModal').dataset.currentEmailId;
+            if (!emailId) {
+                showNotification('Erreur : email introuvable', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/emails/${emailId}/restore`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json'
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification(data.message, 'success');
+                    document.getElementById('readModal').classList.add('hidden');
+                    loadEmails();
+                } else {
+                    showNotification(data.error || 'Erreur lors de la restauration', 'error');
+                }
+            } catch (error) {
+                console.error('Erreur restauration:', error);
+                showNotification('Erreur réseau lors de la restauration', 'error');
+            }
+        });
+
+
         // Fonction pour gérer la réponse
         async function handleReplyClick() {
             const readModal = document.getElementById('readModal');
@@ -1347,8 +1571,6 @@ document.getElementById('composeBtn').addEventListener('click', function() {
     }, 300);
 });
     </script>
-
-    <!-- Footer -->
     <footer>
         <p>&copy; 2025 Missive - Messagerie Sécurisée. Tous droits réservés.</p>
     </footer>

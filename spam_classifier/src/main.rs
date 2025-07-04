@@ -1,91 +1,219 @@
-use csv::ReaderBuilder;
-use linfa::prelude::*;
-use linfa_logistic::LogisticRegression;
-use ndarray::{Array2, Array1};
-use regex::Regex;
-use std::{error::Error, fs};
+mod data;
+mod vectorizer;
+mod model;
 
-/// Lecture brute d'un CSV avec détourage UTF-8
-fn read_csv(path: &str) -> Result<Vec<(String, usize)>, Box<dyn Error>> {
-    let raw = fs::read(path)?;
-    let content = String::from_utf8_lossy(&raw);
-    let mut rdr = ReaderBuilder::new().has_headers(false).from_reader(content.as_bytes());
-    let re = Regex::new(r#"[^a-zA-Z0-9\s]"#)?;
-    let mut data = Vec::new();
-    for result in rdr.records() {
-        let record = result?;
-        let label = if &record[0] == "spam" { 1 } else { 0 };
-        let text = re.replace_all(&record[1], "").to_lowercase();
-        data.push((text, label));
-    }
-    Ok(data)
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use warp::{http::StatusCode, reject, reply, Filter, Rejection, Reply};
+
+// Types pour l'API
+#[derive(Debug, Deserialize)]
+struct ClassifyRequest {
+    text: String,
 }
 
-/// Construit vocabulaire à partir d'un jeu de textes
-fn build_vocab(corpus: &[(String, usize)]) -> Vec<String> {
-    let mut freq = std::collections::HashMap::new();
-    for (text, _) in corpus {
-        for w in text.split_whitespace() {
-            *freq.entry(w.to_string()).or_insert(0) += 1;
+#[derive(Debug, Serialize)]
+struct ClassifyResponse {
+    is_spam: bool,
+    spam_probability: f64,
+    confidence: String,
+}
+
+#[derive(Debug, Serialize)]
+struct HealthResponse {
+    status: String,
+    model_loaded: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct ErrorResponse {
+    error: String,
+}
+
+// Structure pour partager le modèle entre les requêtes
+type SharedClassifier = Arc<RwLock<Option<model::SpamClassifier>>>;
+
+// Gestionnaire pour classifier un email
+async fn classify_handler(
+    request: ClassifyRequest,
+    classifier: SharedClassifier,
+) -> Result<impl Reply, Rejection> {
+    let classifier_guard = classifier.read().await;
+    
+    match classifier_guard.as_ref() {
+        Some(classifier) => {
+            let (prediction, spam_prob) = classifier.predict_single(&request.text);
+            
+            let confidence = if spam_prob > 0.8 {
+                "high".to_string()
+            } else if spam_prob > 0.6 {
+                "medium".to_string()
+            } else {
+                "low".to_string()
+            };
+            
+            let response = ClassifyResponse {
+                is_spam: prediction == 1,
+                spam_probability: spam_prob,
+                confidence,
+            };
+            
+            Ok(reply::with_status(reply::json(&response), StatusCode::OK))
+        }
+        None => {
+            let error = ErrorResponse {
+                error: "Model not loaded".to_string(),
+            };
+            Ok(reply::with_status(reply::json(&error), StatusCode::SERVICE_UNAVAILABLE))
         }
     }
-    freq.into_iter()
-        .filter(|(_, c)| *c > 5)
-        .map(|(w, _)| w)
-        .collect()
 }
 
-/// Transforme corpus en matrice et labels en Array1 selon vocab
-fn vectorize(
-    corpus: &[(String, usize)],
-    vocab_index: &std::collections::HashMap<String, usize>
-) -> (Array2<f64>, Array1<usize>) {
-    let n = corpus.len();
-    let m = vocab_index.len();
-    let mut mat = Array2::<f64>::zeros((n, m));
-    let mut labels = Vec::with_capacity(n);
-    for (i, (text, label)) in corpus.iter().enumerate() {
-        labels.push(*label);
-        for w in text.split_whitespace() {
-            if let Some(&j) = vocab_index.get(w) {
-                mat[[i, j]] += 1.;
+// Gestionnaire pour le health check
+async fn health_handler(classifier: SharedClassifier) -> Result<impl Reply, Rejection> {
+    let classifier_guard = classifier.read().await;
+    let model_loaded = classifier_guard.is_some();
+    
+    let response = HealthResponse {
+        status: "ok".to_string(),
+        model_loaded,
+    };
+    
+    Ok(reply::with_status(reply::json(&response), StatusCode::OK))
+}
+
+// Gestionnaire d'erreurs
+async fn handle_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
+    let error_response = if err.is_not_found() {
+        ErrorResponse {
+            error: "Not found".to_string(),
+        }
+    } else if let Some(_) = err.find::<warp::filters::body::BodyDeserializeError>() {
+        ErrorResponse {
+            error: "Invalid JSON body".to_string(),
+        }
+    } else {
+        ErrorResponse {
+            error: "Internal server error".to_string(),
+        }
+    };
+    
+    Ok(reply::with_status(reply::json(&error_response), StatusCode::BAD_REQUEST))
+}
+
+// Charge le modèle depuis un fichier (à implémenter)
+async fn load_model() -> Result<model::SpamClassifier> {
+    // Pour l'instant, on va entraîner un modèle simple
+    // Plus tard, on chargera depuis un fichier binaire
+    println!("🚀 Chargement/Entraînement du modèle...");
+    
+    let processor = data::DataProcessor::new()?;
+    
+    // Essaie de charger les données
+    let train_emails = match processor.read_csv("/data/train.csv") {
+        Ok(emails) => {
+            println!("✅ {} emails d'entraînement chargés depuis /data/train.csv", emails.len());
+            emails
+        }
+        Err(_) => {
+            println!("⚠️  Échec chargement /data/train.csv, création d'un dataset minimal...");
+            create_minimal_dataset()
+        }
+    };
+    
+    if train_emails.len() < 10 {
+        anyhow::bail!("❌ Dataset trop petit ({}), minimum 10 emails requis", train_emails.len());
+    }
+    
+    // Construction du vocabulaire et vectorisation
+    let vocabulary = processor.build_vocabulary(&train_emails, 2, 1000);
+    let mut vectorizer = vectorizer::TfIdfVectorizer::new(vocabulary);
+    
+    vectorizer.fit(&train_emails);
+    let train_features = vectorizer.transform(&train_emails);
+    let train_labels = vectorizer.extract_labels(&train_emails);
+    
+    // Entraînement
+    let mut classifier = model::SpamClassifier::new(vectorizer);
+    classifier.train(train_features, train_labels)?;
+    
+    println!("✅ Modèle entraîné et prêt!");
+    Ok(classifier)
+}
+
+// Crée un dataset minimal pour les tests
+fn create_minimal_dataset() -> Vec<data::Email> {
+    vec![
+        data::Email { text: "free money win now click here urgent".to_string(), label: 1 },
+        data::Email { text: "viagra cheap pills online pharmacy".to_string(), label: 1 },
+        data::Email { text: "congratulations winner lottery million dollars".to_string(), label: 1 },
+        data::Email { text: "urgent nigerian prince money transfer".to_string(), label: 1 },
+        data::Email { text: "buy now limited time offer discount".to_string(), label: 1 },
+        data::Email { text: "hello how are you today meeting tomorrow".to_string(), label: 0 },
+        data::Email { text: "thanks for the document will review".to_string(), label: 0 },
+        data::Email { text: "reminder about project deadline next week".to_string(), label: 0 },
+        data::Email { text: "lunch meeting scheduled for friday noon".to_string(), label: 0 },
+        data::Email { text: "please find attached report quarterly results".to_string(), label: 0 },
+    ]
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    println!("🚀 Démarrage du serveur API Spam Classifier");
+    println!("📡 Port: 8081");
+    
+    // Initialise le classificateur partagé
+    let classifier: SharedClassifier = Arc::new(RwLock::new(None));
+    
+    // Charge le modèle en arrière-plan
+    let classifier_clone = classifier.clone();
+    tokio::spawn(async move {
+        match load_model().await {
+            Ok(model) => {
+                let mut guard = classifier_clone.write().await;
+                *guard = Some(model);
+                println!("✅ Modèle chargé avec succès!");
+            }
+            Err(e) => {
+                eprintln!("❌ Erreur chargement modèle: {}", e);
             }
         }
-    }
-    (mat, Array1::from(labels))
+    });
+    
+    // Routes
+    let health = warp::path("health")
+        .and(warp::get())
+        .and(with_classifier(classifier.clone()))
+        .and_then(health_handler);
+    
+    let classify = warp::path("classify")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and(with_classifier(classifier.clone()))
+        .and_then(classify_handler);
+    
+    let routes = health
+        .or(classify)
+        .with(warp::cors().allow_any_origin())
+        .recover(handle_rejection);
+    
+    println!("🌐 Serveur démarré sur http://0.0.0.0:8081");
+    println!("📋 Routes disponibles:");
+    println!("   GET  /health   - Health check");
+    println!("   POST /classify - Classifier un email");
+    
+    warp::serve(routes)
+        .run(([0, 0, 0, 0], 8081))
+        .await;
+    
+    Ok(())
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    // Charge corpus
-    let train_raw = read_csv("../data/train.csv")?;
-    let test_raw  = read_csv("../data/test.csv")?;
-
-    // Vocabulaire basé uniquement sur l'entraînement
-    let vocab = build_vocab(&train_raw);
-    let vocab_index: std::collections::HashMap<_, _> = vocab
-        .iter().cloned().enumerate().map(|(i,w)| (w,i)).collect();
-
-    // Vectorisation
-    let (train_x, train_y) = vectorize(&train_raw, &vocab_index);
-    let (test_x, test_y)   = vectorize(&test_raw, &vocab_index);
-
-    // Création de Datasets
-    let train_ds = Dataset::new(train_x, train_y);
-    let test_ds  = Dataset::new(test_x, test_y);
-
-    // Entraînement
-    let model = LogisticRegression::default()
-        .max_iterations(100)
-        .fit(&train_ds)?;
-
-    // Évaluation
-    let cm_train = model.predict(&train_ds).confusion_matrix(&train_ds)?;
-    println!("Train Acc: {:.2}%", cm_train.accuracy() * 100.);
-
-    let cm_test = model.predict(&test_ds).confusion_matrix(&test_ds)?;
-    println!("Test  Acc: {:.2}%", cm_test.accuracy() * 100.);
-    println!("Precision: {:.2}%", cm_test.precision() * 100.);
-    println!("Recall: {:.2}%", cm_test.recall() * 100.);
-
-    Ok(())
+// Helper pour injecter le classificateur dans les handlers
+fn with_classifier(
+    classifier: SharedClassifier,
+) -> impl Filter<Extract = (SharedClassifier,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || classifier.clone())
 }

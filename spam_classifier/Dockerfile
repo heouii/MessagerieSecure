@@ -1,32 +1,32 @@
-# Dockerfile pour le service Rust antispam
+# Build stage - utilise la même base que runtime
+FROM rust:1.82-bookworm as builder
 
-# 1. Builder stage: compile le binaire en release
-FROM rust:latest AS builder
-WORKDIR /usr/src/spam_classifier
+WORKDIR /app
+COPY Cargo.toml ./
+COPY src/ ./src/
 
-# Copie les fichiers Rust
-COPY Cargo.toml Cargo.lock ./
-COPY src ./src
-
-# Compile avec optimisation
+# Build release
 RUN cargo build --release
 
-# 2. Runtime stage: déploie uniquement le binaire
+# Runtime stage - même version de Debian
 FROM debian:bookworm-slim
 
-# Installer le minimum nécessaire
-RUN apt-get update \
-    && apt-get install -y ca-certificates \
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copier le binaire compilé depuis le builder
-COPY --from=builder /usr/src/spam_classifier/target/release/spam_classifier /usr/local/bin/spam_classifier
+WORKDIR /app
 
-# Créer le dossier /data où seront montés train.csv/test.csv
-WORKDIR /data
+COPY --from=builder /app/target/release/spam_classifier /app/spam_classifier
+COPY --from=builder /app/target/release/train /app/train
 
-# Exposer le port sur lequel le service écoute
+RUN chmod +x /app/spam_classifier /app/train
+RUN mkdir -p /app/model
+
 EXPOSE 8081
 
-# Commande par défaut
-CMD ["spam_classifier"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8081/health || exit 1
+
+CMD ["./spam_classifier"]

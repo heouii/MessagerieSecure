@@ -68,7 +68,6 @@ Route::get('/mailgun', function () {
 Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () {
     Route::get('dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
     
-    // Gestion des utilisateurs
     Route::get('users', [UserController::class, 'index'])->name('users');
     Route::get('users/{user}', [UserController::class, 'show'])->name('users.show');
     Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
@@ -125,13 +124,25 @@ Route::post('/mailgun-demo', [MailgunController::class, 'createDemoEmails'])
 
 // Routes pour l'interface web (à placer après les autres routes mailgun)
 Route::middleware(['auth'])->group(function () {
+
+    Route::post('/emails/draft', [MailgunController::class, 'storeDraft'])
+        ->name('mailgun.store_draft');
+    Route::post('/emails/{emailId}/delete', [MailgunController::class, 'deleteEmail'])
+        ->name('mailgun.delete');
+    Route::post('/emails/{emailId}/permanent-delete', [MailgunController::class, 'permanentDeleteEmail'])
+        ->name('mailgun.permanent_delete');
+    Route::post('/emails/{emailId}/restore', [MailgunController::class, 'restoreEmail'])
+        ->name('mailgun.restore');
     Route::get('/mailgun-emails/{emailId}/reply', [MailgunController::class, 'replyToEmail'])
         ->name('mailgun.web.reply');
     Route::get('/mailgun-email-history', [MailgunController::class, 'getEmailHistory'])
         ->name('mailgun.web.email_history');
     Route::get('/mailgun-email-suggestions', [MailgunController::class, 'getEmailSuggestions'])
         ->name('mailgun.web.email_suggestions');
+    Route::post('/emails/{email}/verify', [MailgunController::class, 'verifyEmail'])
+        ->name('emails.verify');
 });
+
 
 //
 // Utilitaires
@@ -141,14 +152,18 @@ Route::get('/check-email-exists', function (\Illuminate\Http\Request $request) {
 });
 
 Route::get('/download-attachment/{path}', function($path) {
-    $fullPath = storage_path('app/public/attachments/' . $path);
-    
+    $fullPath = storage_path('app/public/incoming_attachments/' . $path);
+
     if (!file_exists($fullPath)) {
-        abort(404);
+        abort(404, "Fichier introuvable");
     }
-    
+
     return response()->download($fullPath);
-})->middleware('auth');
+})->where('path', '.*')->middleware('auth');
+
+
+
+
 
 Route::middleware(['auth'])->group(function () {
     // Interface principale
@@ -162,3 +177,27 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/mailgun-email-suggestions', [MailgunController::class, 'getEmailSuggestions']);
     Route::get('/mailgun-email-history', [MailgunController::class, 'getEmailHistory']);
 });
+
+// Test Spam
+Route::get('/test-spam', function() {
+    $service = app(\App\Services\SpamClassifierService::class);
+
+    $tests = [
+        'FREE MONEY WIN NOW CLICK HERE URGENT!' => 'spam attendu',
+        'Hello, how are you today?' => 'ham attendu'
+    ];
+
+    $results = [];
+    foreach ($tests as $text => $expected) {
+        $results[] = [
+            'text' => $text,
+            'expected' => $expected,
+            'result' => $service->classifyEmail($text)
+        ];
+    }
+
+    return response()->json([
+        'service_available' => $service->isServiceAvailable(),
+        'tests' => $results
+    ]);
+})->middleware('auth');

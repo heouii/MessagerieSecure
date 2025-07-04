@@ -42,6 +42,10 @@ return [
 ],
 
 
-
+'spam_classifier' => [
+    'url' => env('SPAM_CLASSIFIER_URL', 'http://spam_classifier:8081'),
+    'timeout' => env('SPAM_CLASSIFIER_TIMEOUT', 5),
+    'enabled' => env('SPAM_CLASSIFIER_ENABLED', true),
+],
 
 ];

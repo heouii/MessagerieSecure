@@ -8,8 +8,10 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use App\Models\User;
 use App\Models\Email;
+use Sunspikes\ClamavValidator\ClamavValidator;
 
 class MailgunController extends Controller
 {
@@ -111,65 +113,78 @@ public function sendEmail(Request $request): JsonResponse
                 mkdir($tempDir, 0755, true);
             }
             
-            foreach ($request->file('attachments') as $index => $file) {
-                if (!$file->isValid()) {
-                    Log::error('Fichier invalide', ['error' => $file->getErrorMessage()]);
-                    continue;
-                }
-                
-                try {
-                    // Obtenir les informations AVANT de déplacer le fichier
-                    $originalName = $file->getClientOriginalName();
-                    $fileSize = $file->getSize();
-                    $mimeType = $file->getMimeType();
-                    $tempPath = $file->path(); // Chemin temporaire actuel
-                    
-                    Log::info('📄 Traitement fichier', [
-                        'original_name' => $originalName,
-                        'size' => $fileSize,
-                        'mime_type' => $mimeType,
-                        'temp_path' => $tempPath,
-                        'exists' => file_exists($tempPath)
+        foreach ($request->file('attachments') as $index => $file) {
+            if (!$file->isValid()) {
+                Log::error('Fichier invalide', ['error' => $file->getErrorMessage()]);
+                continue;
+            }
+
+            try {
+                $originalName = $file->getClientOriginalName();
+                $fileSize = $file->getSize();
+                $mimeType = $file->getMimeType();
+                $tempPath = $file->path();
+
+                // Créer un nom de fichier sécurisé
+                $safeName = time() . '_' . uniqid() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $finalPath = $tempDir . '/' . $safeName;
+
+              
+                if (!copy($tempPath, $finalPath)) {
+                    Log::error('Erreur copie fichier avant scan', [
+                        'from' => $tempPath,
+                        'to' => $finalPath
                     ]);
-                    
-                    // Créer un nom de fichier sécurisé
-                    $safeName = time() . '_' . uniqid() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-                    $finalPath = $tempDir . '/' . $safeName;
-                    
-                    // Copier le fichier vers notre dossier temporaire
-                    if (copy($tempPath, $finalPath)) {
-                        $attachments[] = [
-                            'filename' => $originalName,
-                            'safe_name' => $safeName,
-                            'size' => $fileSize,
-                            'mime_type' => $mimeType,
-                            'full_path' => $finalPath
-                        ];
-                        
-                        $tempFiles[] = $finalPath;
-                        
-                        Log::info('✅ Fichier copié avec succès', [
-                            'original' => $originalName,
-                            'path' => $finalPath,
-                            'size' => filesize($finalPath)
-                        ]);
-                    } else {
-                        Log::error('❌ Erreur copie fichier', [
-                            'from' => $tempPath,
-                            'to' => $finalPath
-                        ]);
-                    }
-                    
-                } catch (\Exception $fileEx) {
-                    Log::error('❌ Erreur traitement fichier', [
-                        'error' => $fileEx->getMessage(),
-                        'file' => $originalName ?? 'inconnu'
-                    ]);
+                    return response()->json(['error' => 'Erreur lors de la préparation du fichier.'], 500);
                 }
+
+                // Scanner la copie
+                $clamavOutput = [];
+                $clamavReturn = 0;
+
+                exec('clamscan ' . escapeshellarg($finalPath), $clamavOutput, $clamavReturn);
+
+                Log::info('Résultat ClamAV', [
+                    'output' => $clamavOutput,
+                    'return' => $clamavReturn
+                ]);
+
+                if ($clamavReturn === 1) {
+                    unlink($finalPath); 
+                    return response()->json([
+                        'error' => "Le fichier « $originalName » est infecté et ne peut pas être envoyé."
+                    ], 422);
+                }
+
+       
+                $attachments[] = [
+                    'filename' => $originalName,
+                    'safe_name' => $safeName,
+                    'size' => $fileSize,
+                    'mime_type' => $mimeType,
+                    'full_path' => $finalPath
+                ];
+
+                $tempFiles[] = $finalPath;
+
+                Log::info('Fichier copié et scanné avec succès', [
+                    'original' => $originalName,
+                    'path' => $finalPath,
+                    'size' => filesize($finalPath)
+                ]);
+
+
+            } catch (\Exception $fileEx) {
+                Log::error('Erreur traitement fichier', [
+                    'error' => $fileEx->getMessage(),
+                    'file' => $originalName ?? 'inconnu'
+                ]);
             }
         }
 
-        Log::info('📧 Préparation envoi', [
+        }
+
+        Log::info('Préparation envoi', [
             'to' => $request->to,
             'attachments_count' => count($attachments)
         ]);
@@ -181,16 +196,15 @@ public function sendEmail(Request $request): JsonResponse
             $response = $this->sendEmailWithAttachments($emailData, $attachments);
         }
 
-        // Nettoyer les fichiers temporaires après envoi
         foreach ($tempFiles as $tempFile) {
             if (file_exists($tempFile)) {
                 unlink($tempFile);
-                Log::info('🗑️ Fichier temporaire nettoyé', ['file' => basename($tempFile)]);
+                Log::info('Fichier temporaire nettoyé', ['file' => basename($tempFile)]);
             }
         }
 
         if ($response['success']) {
-            // Sauvegarder en base
+
             Email::create([
                 'user_id' => auth()->id(),
                 'mailgun_id' => $response['mailgun_id'],
@@ -220,7 +234,7 @@ public function sendEmail(Request $request): JsonResponse
         return response()->json(['error' => 'Erreur lors de l\'envoi: ' . ($response['error'] ?? 'Inconnue')], 500);
 
     } catch (\Exception $e) {
-        Log::error('💥 Erreur envoi email', [
+        Log::error('Erreur envoi email', [
             'error' => $e->getMessage(),
             'line' => $e->getLine(),
             'file' => basename($e->getFile())
@@ -253,11 +267,11 @@ private function sendSimpleEmail(array $emailData): array
             ];
         }
 
-        Log::error('❌ Erreur HTTP simple', ['status' => $response->status(), 'body' => $response->body()]);
+        Log::error(' Erreur HTTP simple', ['status' => $response->status(), 'body' => $response->body()]);
         return ['success' => false, 'error' => 'HTTP ' . $response->status()];
 
     } catch (\Exception $e) {
-        Log::error('❌ Exception email simple', ['error' => $e->getMessage()]);
+        Log::error(' Exception email simple', ['error' => $e->getMessage()]);
         return ['success' => false, 'error' => $e->getMessage()];
     }
 }
@@ -270,7 +284,7 @@ private function sendEmailWithAttachments(array $emailData, array $attachments):
     try {
         $url = "https://{$this->mailgunEndpoint}/v3/{$this->mailgunDomain}/messages";
         
-        Log::info('📎 Envoi avec pièces jointes', [
+        Log::info(' Envoi avec pièces jointes', [
             'attachments_count' => count($attachments)
         ]);
         
@@ -299,12 +313,12 @@ private function sendEmailWithAttachments(array $emailData, array $attachments):
             if (file_exists($attachment['full_path'])) {
                 $cmd .= " -F " . escapeshellarg("attachment=@{$attachment['full_path']}");
                 
-                Log::info('📎 Pièce jointe ajoutée', [
+                Log::info(' Pièce jointe ajoutée', [
                     'file' => $attachment['filename'],
                     'size' => filesize($attachment['full_path'])
                 ]);
             } else {
-                Log::error('❌ Fichier non trouvé', [
+                Log::error(' Fichier non trouvé', [
                     'path' => $attachment['full_path']
                 ]);
             }
@@ -317,7 +331,7 @@ private function sendEmailWithAttachments(array $emailData, array $attachments):
         
         $response = implode("\n", $output);
         
-        Log::info('📊 Résultat envoi', [
+        Log::info('Résultat envoi', [
             'return_code' => $returnCode,
             'response' => $response
         ]);
@@ -336,7 +350,7 @@ private function sendEmailWithAttachments(array $emailData, array $attachments):
         return ['success' => false, 'error' => "Erreur cURL: {$response}"];
         
     } catch (\Exception $e) {
-        Log::error('❌ Exception cURL', ['error' => $e->getMessage()]);
+        Log::error(' Exception cURL', ['error' => $e->getMessage()]);
         return ['success' => false, 'error' => $e->getMessage()];
     }
 }
@@ -375,14 +389,14 @@ private function buildCurlCommand(string $url, array $emailData, array $attachme
             // Syntaxe exacte : attachment=@/path/to/file
             $parts[] = "-F " . escapeshellarg("attachment=@{$attachment['full_path']}");
             
-            Log::info('📎 Pièce jointe ajoutée', [
+            Log::info(' Pièce jointe ajoutée', [
                 'filename' => $attachment['filename'],
                 'path' => $attachment['full_path'],
                 'exists' => file_exists($attachment['full_path']),
                 'size' => filesize($attachment['full_path'])
             ]);
         } else {
-            Log::error('❌ Fichier pièce jointe introuvable', [
+            Log::error(' Fichier pièce jointe introuvable', [
                 'path' => $attachment['full_path'],
                 'filename' => $attachment['filename']
             ]);
@@ -392,7 +406,7 @@ private function buildCurlCommand(string $url, array $emailData, array $attachme
     // Joindre toutes les parties
     $curlCommand = implode(' ', $parts);
     
-    Log::info('🔧 Commande cURL construite', [
+    Log::info(' Commande cURL construite', [
         'command_length' => strlen($curlCommand),
         'attachments_count' => count($attachments),
         'command_preview' => substr($curlCommand, 0, 200) . '...'
@@ -411,13 +425,18 @@ private function buildCurlCommand(string $url, array $emailData, array $attachme
                 ->where('folder', $folder)
                 ->orderBy('created_at', 'desc');
 
+            // Si le dossier n'est pas la corbeille, exclure les supprimés
+            if ($folder !== 'trash') {
+                $query->whereNull('deleted_at');
+            }
+
             // Recherche optionnelle
-            if ($request->has('search') && $request->search !== '') {
+            if ($request->has('search') && trim($request->search) !== '') {
                 $search = $request->search;
                 $query->where(function($q) use ($search) {
                     $q->where('subject', 'like', "%{$search}%")
-                      ->orWhere('content', 'like', "%{$search}%")
-                      ->orWhere('from_email', 'like', "%{$search}%");
+                    ->orWhere('content', 'like', "%{$search}%")
+                    ->orWhere('from_email', 'like', "%{$search}%");
                 });
             }
 
@@ -452,6 +471,7 @@ private function buildCurlCommand(string $url, array $emailData, array $attachme
         }
     }
 
+
     /**
      * Marquer un email comme lu
      */
@@ -472,6 +492,90 @@ private function buildCurlCommand(string $url, array $emailData, array $attachme
         }
     }
 
+   public function verifyEmail(Request $request, $emailId): JsonResponse
+    {
+        try {
+            $email = Email::where('user_id', auth()->id())
+                ->where('folder', 'unverified')
+                ->findOrFail($emailId);
+
+            $domain = substr(strrchr($email->from_email, "@"), 1);
+            $trustedDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'protonmail.com'];
+
+            if (in_array($domain, $trustedDomains)) {
+                // Domaine connu = validation directe
+                $email->update([
+                    'folder' => 'inbox',
+                    'signature_verified' => true
+                ]);
+
+                // Enregistrer comme approuvé (par domaine)
+                \App\Models\ApprovedSender::firstOrCreate([
+                    'user_id' => auth()->id(),
+                    'domain' => $domain
+                ]);
+
+            } else {
+                if (!$request->has('force') || $request->input('force') !== '1') {
+                    return response()->json([
+                        'need_confirmation' => true,
+                        'message' => "Le domaine «$domain» est inconnu. Confirmation nécessaire."
+                    ]);
+                }
+
+                // Validation après confirmation
+                $email->update([
+                    'folder' => 'inbox',
+                    'signature_verified' => true
+                ]);
+
+                // Enregistrer comme approuvé (par email précis)
+                \App\Models\ApprovedSender::firstOrCreate([
+                    'user_id' => auth()->id(),
+                    'email' => $email->from_email
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Email vérifié et déplacé en boîte de réception.'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Erreur vérification email', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur lors de la vérification.'], 500);
+        }
+    }
+
+
+
+    public function storeDraft(Request $request)
+    {
+    
+        $request->validate([
+            'to' => 'nullable|string|max:255',
+            'cc' => 'nullable|string|max:255',
+            'subject' => 'nullable|string|max:255',
+            'content' => 'nullable|string',
+        ]);
+
+        $draft = new \App\Models\Email();
+        $draft->user_id = auth()->id();
+        $draft->folder = 'drafts';
+        $draft->to_email = $request->input('to');
+        $draft->cc_email = $request->input('cc');
+        $draft->subject = $request->input('subject');
+        $draft->content = $request->input('content');
+        $draft->is_html = $request->boolean('html_format', false) ? 1 : 0;
+
+        $draft->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Brouillon enregistré'
+        ]);
+    }
+
     /**
      * Supprimer un email (déplacer vers corbeille)
      */
@@ -479,15 +583,70 @@ private function buildCurlCommand(string $url, array $emailData, array $attachme
     {
         try {
             $email = Email::where('user_id', auth()->id())->findOrFail($emailId);
-            $email->update(['folder' => 'trash']);
-            
+            $email->update([
+                'folder' => 'trash',
+                'deleted_at' => \Carbon\Carbon::now()
+            ]);
+
             return response()->json(['success' => true, 'message' => 'Email déplacé vers la corbeille']);
-            
+
         } catch (\Exception $e) {
             Log::error('Erreur suppression email', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Erreur suppression'], 500);
         }
     }
+
+    /**
+     * Suppression définitive d'un email
+     */
+    public function permanentDeleteEmail(Request $request, $emailId): JsonResponse
+    {
+        try {
+            $email = Email::where('user_id', auth()->id())
+                ->where('folder', 'trash')
+                ->findOrFail($emailId);
+
+            $email->forceDelete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Email supprimé définitivement'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Erreur suppression définitive', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur suppression définitive'], 500);
+        }
+    }
+
+
+
+    /**
+     * Restaurer un email depuis la corbeille
+     */
+    public function restoreEmail(Request $request, $emailId): JsonResponse
+    {
+        try {
+            $email = Email::where('user_id', auth()->id())
+                ->where('folder', 'trash')
+                ->findOrFail($emailId);
+
+            $email->update([
+                'folder' => 'inbox',
+                'deleted_at' => null
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Email restauré dans la boîte de réception'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Erreur restauration email', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur restauration'], 500);
+        }
+    }
+
 
     /**
      * Créer des emails de démonstration
@@ -596,100 +755,138 @@ private function buildCurlCommand(string $url, array $emailData, array $attachme
     /**
      * Recevoir des emails entrants via webhook Mailgun
      */
-    public function handleIncomingEmail(Request $request): JsonResponse
+   public function handleIncomingEmail(Request $request): JsonResponse
     {
         try {
-            Log::info('🔥 Webhook Mailgun reçu', $request->all());
-            
-            // Vérifier la signature
-            $isSignatureValid = $this->verifyWebhookSignature($request);
-            
-            // Déterminer le dossier selon la signature
-            $folder = $isSignatureValid ? 'inbox' : 'unverified';
-            
-            Log::info('🔐 Signature vérifiée', [
-                'valid' => $isSignatureValid,
-                'folder' => $folder
+            Log::info('=== WEBHOOK DEBUG ===', [
+                'subject' => $request->input('Subject'),
+                'from' => $request->input('From'),
             ]);
 
-            // Extraire les données
+            // Extraire les données d'en-tête AVANT d'utiliser $from/$to
             $from = $request->input('From') ?? $request->input('from');
             $to = $request->input('To') ?? $request->input('to');
             $subject = $request->input('Subject') ?? $request->input('subject') ?? 'Sans objet';
             $bodyPlain = $request->input('body-plain') ?? '';
             $bodyHtml = $request->input('body-html') ?? '';
 
-            // Traiter les pièces jointes entrantes
+            // Vérifier la signature
+            $isSignatureValid = $this->verifyWebhookSignature($request);
+
+            // Trouver l'utilisateur
+            $userId = $this->findUserByEmail($to);
+            if (!$userId) {
+                Log::warning('Utilisateur non trouvé', ['email' => $to]);
+                return response()->json(['error' => 'Destinataire non trouvé'], 404);
+            }
+
+            $emailContent = $bodyHtml ?: $bodyPlain;
+            $fromEmail = $this->extractEmail($from);
+
+            // Test simple sans détails
+            $spamClassification = $this->classifyEmail($emailContent);
+
+            Log::info('🤖 Classification spam', $spamClassification);
+
+            // Vérifier si l'expéditeur est approuvé
+            $domain = substr(strrchr($fromEmail, "@"), 1);
+            $isApproved = \App\Models\ApprovedSender::where('user_id', $userId)
+                ->where(function($query) use ($fromEmail, $domain) {
+                    $query->where('email', $fromEmail)
+                        ->orWhere('domain', $domain);
+                })
+                ->exists();
+
+            // Déterminer le dossier basé sur signature, approbation ET spam
+            $folder = 'inbox'; // Par défaut
+
+            if ($spamClassification['is_spam'] && $spamClassification['spam_probability'] > 0.7) {
+                $folder = 'spam';
+            } elseif (!$isSignatureValid && !$isApproved) {
+                $folder = 'unverified';
+            }
+
+            Log::info('📁 Dossier déterminé', [
+                'folder' => $folder,
+                'signature_valid' => $isSignatureValid,
+                'approved' => $isApproved,
+                'spam_probability' => $spamClassification['spam_probability']
+            ]);
+
+            // Traiter les pièces jointes (code existant)
             $attachments = [];
             $attachmentCount = $request->input('attachment-count', 0);
 
             for ($i = 1; $i <= $attachmentCount; $i++) {
                 if ($request->hasFile("attachment-{$i}")) {
                     $file = $request->file("attachment-{$i}");
-                    $filename = time() . '_' . $file->getClientOriginalName();
-                    $path = $file->storeAs('incoming_attachments', $filename, 'private');
-                    
+                    $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+                    $path = 'attachments/' . $filename;
+
+                    $file->storeAs('public', $path);
+
                     $attachments[] = [
                         'filename' => $file->getClientOriginalName(),
                         'path' => $path,
                         'size' => $file->getSize(),
                         'mime_type' => $file->getMimeType()
                     ];
-                    
-                    Log::info('📎 Pièce jointe reçue', [
-                        'filename' => $file->getClientOriginalName(),
-                        'size' => $file->getSize()
-                    ]);
                 }
             }
-            
-            // Trouver l'utilisateur
-            $userId = $this->findUserByEmail($to);
-            
-            if (!$userId) {
-                Log::warning('❌ Utilisateur non trouvé', ['email' => $to]);
-                return response()->json(['error' => 'Destinataire non trouvé'], 404);
-            }
 
-            // Créer l'email avec le bon dossier et les pièces jointes
+            // Créer l'email avec valeurs par défaut pour le spam
             $email = Email::create([
                 'user_id' => $userId,
-                'folder' => $folder, // 'inbox' ou 'unverified'
-                'from_email' => $this->extractEmail($from),
-                'from_name' => $this->extractName($from) ?? $this->extractEmail($from),
+                'folder' => $folder,
+                'from_email' => $fromEmail,
+                'from_name' => $this->extractName($from) ?? $fromEmail,
                 'to_email' => $this->extractEmail($to),
                 'subject' => $subject,
-                'content' => $bodyHtml ?: $bodyPlain,
+                'content' => $emailContent,
                 'preview' => substr($bodyPlain ?: strip_tags($bodyHtml), 0, 100),
                 'is_html' => !empty($bodyHtml),
                 'is_read' => false,
                 'signature_verified' => $isSignatureValid,
                 'attachments' => json_encode($attachments),
+
+                // Valeurs par défaut pour le spam
+                // Vraies valeurs de classification spam - CORRECT !
+'is_spam' => $spamClassification['is_spam'],
+'spam_probability' => $spamClassification['spam_probability'],
+'spam_confidence' => $spamClassification['confidence'],
+'spam_checked_at' => now(),
+'spam_details' => json_encode($spamClassification['details'] ?? []),
             ]);
 
             Log::info('✅ Email sauvegardé', [
                 'email_id' => $email->id,
                 'folder' => $folder,
-                'signature_valid' => $isSignatureValid,
-                'attachments_count' => count($attachments)
+                'is_spam' => $spamClassification['is_spam'],
+                'spam_probability' => $spamClassification['spam_probability']
             ]);
 
             return response()->json([
-                'success' => true, 
+                'success' => true,
                 'email_id' => $email->id,
                 'folder' => $folder,
                 'signature_verified' => $isSignatureValid,
+                'spam_classification' => [
+                    'is_spam' => $spamClassification['is_spam'],
+                    'probability' => $spamClassification['spam_probability'],
+                    'confidence' => $spamClassification['confidence']
+                ],
                 'attachments_count' => count($attachments)
             ]);
 
         } catch (\Exception $e) {
-            Log::error('💥 Erreur webhook', [
+            Log::error('Erreur webhook', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
             return response()->json(['error' => 'Erreur'], 500);
         }
     }
+
 
     /**
      * Vérifier la signature du webhook Mailgun
@@ -803,7 +1000,7 @@ private function buildCurlCommand(string $url, array $emailData, array $attachme
             }
             
             $attachment = $attachments[$attachmentIndex];
-            $filePath = storage_path('app/private/' . $attachment['path']);
+            $filePath = storage_path('app/public/' . $attachment['path']);
             
             if (!file_exists($filePath)) {
                 abort(404, 'Fichier non trouvé');
@@ -974,6 +1171,129 @@ private function buildCurlCommand(string $url, array $emailData, array $attachme
         } catch (\Exception $e) {
             Log::error('Erreur autocomplétion', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Erreur autocomplétion'], 500);
+        }
+    }
+
+    /**
+     * Classifier un email comme spam ou ham
+     */
+    private function classifyEmail(string $emailContent): array
+    {
+        $spamApiUrl = config('services.spam_classifier.url', 'http://spam_classifier:8081');
+        $cacheKey = 'spam_check_' . md5($emailContent);
+        
+        // Vérifier le cache (5 minutes)
+        if (Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
+        
+        try {
+            Log::info('🤖 Classification spam démarrée', [
+                'content_length' => strlen($emailContent)
+            ]);
+            
+            $response = Http::timeout(5)
+                ->post("{$spamApiUrl}/classify", [
+                    'text' => $emailContent
+                ]);
+            
+            if ($response->successful()) {
+                $result = $response->json();
+                
+                $classification = [
+                    'is_spam' => $result['is_spam'] ?? false,
+                    'spam_probability' => $result['spam_probability'] ?? 0.0,
+                    'confidence' => $result['confidence'] ?? 'unknown',
+                    'service_available' => true,
+                    'processed_at' => now()
+                ];
+                
+                // Mettre en cache pour 5 minutes
+                Cache::put($cacheKey, $classification, 300);
+                
+                Log::info('✅ Classification réussie', $classification);
+                return $classification;
+            }
+            
+            Log::warning('⚠️ API spam indisponible', [
+                'status' => $response->status()
+            ]);
+            
+            return $this->getFallbackSpamResult();
+            
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur classification spam', [
+                'error' => $e->getMessage()
+            ]);
+            
+            return $this->getFallbackSpamResult();
+        }
+    }
+
+    /**
+     * Résultat de secours si l'API n'est pas disponible
+     */
+    private function getFallbackSpamResult(): array
+    {
+        return [
+            'is_spam' => false,
+            'spam_probability' => 0.0,
+            'confidence' => 'fallback',
+            'service_available' => false,
+            'processed_at' => now()
+        ];
+    }
+
+    /**
+     * Route de test pour l'API spam
+     */
+    public function testSpamClassifier(): JsonResponse
+    {
+        try {
+            $tests = [
+                'FREE MONEY WIN NOW CLICK HERE URGENT!' => 'spam attendu',
+                'Hello, how are you today?' => 'ham attendu'
+            ];
+            
+            $results = [];
+            foreach ($tests as $text => $expected) {
+                $results[] = [
+                    'text' => $text,
+                    'expected' => $expected,
+                    'result' => $this->classifyEmail($text)
+                ];
+            }
+            
+            return response()->json([
+                'service_available' => $this->isSpamServiceAvailable(),
+                'tests' => $results
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Erreur test spam', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur test'], 500);
+        }
+    }
+
+    /**
+     * Vérifier que le service spam est disponible
+     */
+    private function isSpamServiceAvailable(): bool
+    {
+        try {
+            $spamApiUrl = config('services.spam_classifier.url', 'http://spam_classifier:8081');
+            $response = Http::timeout(2)->get("{$spamApiUrl}/health");
+            
+            if ($response->successful()) {
+                $data = $response->json();
+                return ($data['status'] ?? '') === 'ok' && ($data['model_loaded'] ?? false);
+            }
+            
+            return false;
+            
+        } catch (\Exception $e) {
+            Log::debug('Service spam indisponible', ['error' => $e->getMessage()]);
+            return false;
         }
     }
 }

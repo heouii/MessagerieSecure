@@ -125,7 +125,6 @@
         options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
     });
 
-    // Nouveau graphique Utilisateurs actifs vs bloqués
     new Chart(document.getElementById('chartUserStatus'), {
         type: 'doughnut',
         data: {

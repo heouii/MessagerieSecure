@@ -76,9 +76,9 @@ trait EmailReceiving
                     $file = $request->file("attachment-{$i}");
                     $originalName = $file->getClientOriginalName();
                     
-                    // Nettoyer le nom de fichier
+                    // Nettoyer le nom de fichier - UTILISER LE TRAIT FileUtilities
                     $cleanName = $this->cleanFilename($originalName);
-                    $filename = time() . '_' . uniqid() . '_' . $cleanName;
+                    $filename = $this->generateUniqueFilename($originalName);
 
                     // Sauvegarder directement dans storage/app/public/attachments/
                     $storagePath = 'attachments/' . $filename;
@@ -168,10 +168,59 @@ trait EmailReceiving
         return $user ? $user->id : null;
     }
 
-   
+    // Méthode simplifiée pour nettoyer les noms de fichiers - SUPPRIMÉE
+    // Maintenant dans FileUtilities trait
+
     private function classifyEmail(string $emailContent): array
     {
-        return $this->getFallbackSpamResult();
+        $spamApiUrl = config('services.spam_classifier.url', 'http://spam_classifier:8081');
+        $cacheKey = 'spam_check_' . md5($emailContent);
+
+        if (Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
+
+        try {
+            Log::info('🔍 Classification spam démarrée', [
+                'content_length' => strlen($emailContent)
+            ]);
+
+            $response = Http::timeout(5)
+                ->post("{$spamApiUrl}/classify", [
+                    'text' => $emailContent
+                ]);
+
+            if ($response->successful()) {
+                $result = $response->json();
+
+                $classification = [
+                    'is_spam' => $result['is_spam'] ?? false,
+                    'spam_probability' => $result['spam_probability'] ?? 0.0,
+                    'confidence' => $result['confidence'] ?? 'unknown',
+                    'service_available' => true,
+                    'processed_at' => now(),
+                    'details' => $result
+                ];
+
+                Cache::put($cacheKey, $classification, 300);
+
+                Log::info('✅ Classification réussie', $classification);
+                return $classification;
+            }
+
+            Log::warning('⚠️ API spam indisponible', [
+                'status' => $response->status()
+            ]);
+
+            return $this->getFallbackSpamResult();
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur classification spam', [
+                'error' => $e->getMessage()
+            ]);
+
+            return $this->getFallbackSpamResult();
+        }
     }
 
     private function verifyWebhookSignature(Request $request): bool
@@ -234,7 +283,42 @@ trait EmailReceiving
             'spam_probability' => 0.0,
             'confidence' => 'fallback',
             'service_available' => false,
-            'processed_at' => now()
+            'processed_at' => now(),
+            'details' => ['method' => 'fallback']
+        ];
+    }
+
+    // Classification spam basique si le service externe est indisponible
+    private function basicSpamClassification(string $content): array
+    {
+        $spamWords = [
+            'free money', 'win now', 'urgent', 'limited time', 'act now',
+            'congratulations', 'you have won', 'claim now', 'click here',
+            'viagra', 'casino', 'lottery', 'inheritance'
+        ];
+        
+        $content = strtolower($content);
+        $spamWordCount = 0;
+        
+        foreach ($spamWords as $word) {
+            if (strpos($content, $word) !== false) {
+                $spamWordCount++;
+            }
+        }
+        
+        $probability = min($spamWordCount / 3, 1.0); // 3+ mots = 100% spam
+        $isSpam = $probability > 0.6;
+        
+        return [
+            'is_spam' => $isSpam,
+            'spam_probability' => $probability,
+            'confidence' => 'basic',
+            'service_available' => false,
+            'processed_at' => now(),
+            'details' => [
+                'method' => 'basic_keyword_detection',
+                'spam_words_found' => $spamWordCount
+            ]
         ];
     }
 }

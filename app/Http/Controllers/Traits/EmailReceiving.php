@@ -54,7 +54,7 @@ trait EmailReceiving
                 ->exists();
 
             $folder = 'inbox';
-            if ($spamClassification['is_spam'] && $spamClassification['spam_probability'] > 0.7) {
+            if ($spamClassification['is_spam'] && $spamClassification['spam_probability'] > 0.4) { // Réduit de 0.7 à 0.4
                 $folder = 'spam';
             } elseif (!$isSignatureValid && !$isApproved) {
                 $folder = 'unverified';
@@ -202,6 +202,24 @@ trait EmailReceiving
                     'details' => $result
                 ];
 
+                // Si le service externe donne un score faible mais que le contenu semble suspect,
+                // utiliser notre classification basique comme backup
+                if ($classification['spam_probability'] < 0.5) {
+                    $basicClassification = $this->basicSpamClassification($emailContent);
+                    if ($basicClassification['spam_probability'] > $classification['spam_probability']) {
+                        Log::info('🔄 Classification basique plus stricte, utilisation du score local', [
+                            'external_score' => $classification['spam_probability'],
+                            'basic_score' => $basicClassification['spam_probability']
+                        ]);
+                        
+                        $classification['spam_probability'] = $basicClassification['spam_probability'];
+                        $classification['is_spam'] = $basicClassification['is_spam'];
+                        $classification['confidence'] = 'hybrid';
+                        $classification['details']['fallback_used'] = true;
+                        $classification['details']['basic_details'] = $basicClassification['details'];
+                    }
+                }
+
                 Cache::put($cacheKey, $classification, 300);
 
                 Log::info('✅ Classification réussie', $classification);
@@ -292,32 +310,71 @@ trait EmailReceiving
     private function basicSpamClassification(string $content): array
     {
         $spamWords = [
+            // Mots français typiques
+            'félicitations', 'gagné', 'gagne', 'prix', 'cadeau', 'gratuit',
+            'confirmer maintenant', 'dépêche-toi', 'limité', 'urgent',
+            'cliquez ici', 'récupérez', 'aspirateur', 'offre limitée',
+            'vous avez gagné', 'toutes nos félicitations',
+            
+            // Mots anglais
             'free money', 'win now', 'urgent', 'limited time', 'act now',
             'congratulations', 'you have won', 'claim now', 'click here',
             'viagra', 'casino', 'lottery', 'inheritance'
         ];
         
-        $content = strtolower($content);
-        $spamWordCount = 0;
+        $suspiciousPatterns = [
+            // Domaines suspects
+            'storage.googleapis.com',
+            'gp1fbbm',
+            // Caractères Unicode suspects (comme dans le sujet)
+            'ᴇ', 'ᴄ', 'ᴜ', 'ᴘ', 'ʀ', 'ᴀ', 'ᴅ', 'ɪ', 'ʟ', 'ᴏ', 'ᴛ', 'ᴍ', 'ɢ', 'ᴏ', 'ɴ', 'ʜ'
+        ];
         
+        $content = strtolower($content);
+        $spamScore = 0;
+        
+        // Compter les mots spam
         foreach ($spamWords as $word) {
-            if (strpos($content, $word) !== false) {
-                $spamWordCount++;
+            if (strpos($content, strtolower($word)) !== false) {
+                $spamScore += 0.2;
             }
         }
         
-        $probability = min($spamWordCount / 3, 1.0); // 3+ mots = 100% spam
+        // Compter les patterns suspects
+        foreach ($suspiciousPatterns as $pattern) {
+            if (strpos($content, strtolower($pattern)) !== false) {
+                $spamScore += 0.3;
+            }
+        }
+        
+        // Bonus pour combinaisons typiques
+        if (strpos($content, 'félicitations') !== false && strpos($content, 'gagné') !== false) {
+            $spamScore += 0.4;
+        }
+        
+        if (strpos($content, 'confirmer') !== false && strpos($content, 'maintenant') !== false) {
+            $spamScore += 0.3;
+        }
+        
+        // URLs suspectes multiples
+        $urlCount = substr_count($content, 'http');
+        if ($urlCount > 3) {
+            $spamScore += 0.2;
+        }
+        
+        $probability = min($spamScore, 1.0);
         $isSpam = $probability > 0.6;
         
         return [
             'is_spam' => $isSpam,
             'spam_probability' => $probability,
-            'confidence' => 'basic',
+            'confidence' => 'enhanced_basic',
             'service_available' => false,
             'processed_at' => now(),
             'details' => [
-                'method' => 'basic_keyword_detection',
-                'spam_words_found' => $spamWordCount
+                'method' => 'enhanced_keyword_detection',
+                'spam_score' => $spamScore,
+                'url_count' => $urlCount
             ]
         ];
     }

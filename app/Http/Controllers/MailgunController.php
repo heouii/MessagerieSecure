@@ -26,10 +26,9 @@ class MailgunController extends Controller
 
     public function index()
     {
-        return view('interface');
+        return view('messaging');
     }
 
-    // Seules les méthodes utilitaires restent ici
     private function isBlacklistedEmail(string $email): bool
     {
         $email = strtolower($email);
@@ -48,7 +47,6 @@ class MailgunController extends Controller
     {
         $cleanEmail = $this->extractEmail($email);
         
-        // Chercher d'abord une correspondance exacte
         $user = User::where('email', $cleanEmail)->first();
         
         if ($user) {

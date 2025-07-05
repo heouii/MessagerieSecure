@@ -57,7 +57,7 @@
     <div class="row g-3 mb-4">
         <div class="col-md-6">
             <div class="card shadow-sm h-100">
-                <div class="card-header fw-bold bg-light">Spams détectés par type</div>
+                <div class="card-header fw-bold bg-light">Répartition des Spams détectés</div>
                 <div class="card-body d-flex align-items-center justify-content-center">
                     <canvas id="chartSpams" style="max-height: 250px; width: 100%;"></canvas>
                 </div>
@@ -146,17 +146,23 @@
     });
 
     new Chart(document.getElementById('chartSpams'), {
-        type: 'radar',
+        type: 'doughnut',
         data: {
-            labels: ['Phishing', 'Publicité', 'Malware', 'Autres'],
+            labels: ['Spams détectés', 'Emails légitimes'],
             datasets: [{
-                label: 'Spams détectés',
-                backgroundColor: 'rgba(206,147,216,0.2)',
-                borderColor: '#CE93D8',
-                pointBackgroundColor: '#CE93D8'
+                data: [{{ $spamCount }}, {{ $hamCount }}],
+                backgroundColor: ['#E57373', '#B39DDB'],
+                hoverOffset: 20,
+                borderWidth: 2,
+                borderColor: '#fff'
             }]
         },
-        options: { scales: { r: { beginAtZero: true } } }
+        options: {
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            cutout: '70%'
+        }
     });
 
     new Chart(document.getElementById('chartDeleted'), {

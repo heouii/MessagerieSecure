@@ -144,7 +144,6 @@ Route::middleware(['auth'])->group(function () {
 });
 
 
-//
 // Utilitaires
 Route::get('/check-email-exists', function (\Illuminate\Http\Request $request) {
     $exists = \App\Models\User::where('email', $request->query('email'))->exists();
@@ -152,7 +151,7 @@ Route::get('/check-email-exists', function (\Illuminate\Http\Request $request) {
 });
 
 Route::get('/download-attachment/{path}', function($path) {
-    $fullPath = storage_path('app/public/incoming_attachments/' . $path);
+    $fullPath = storage_path('app/public/' . $path);
 
     if (!file_exists($fullPath)) {
         abort(404, "Fichier introuvable");

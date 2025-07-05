@@ -5,41 +5,41 @@ namespace App\Http\Controllers\Traits;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;  // ← MANQUANT
-use Carbon\Carbon;  // ← MANQUANT
+use Illuminate\Support\Facades\Validator;
+use Carbon\Carbon;
 use App\Models\Email;
 
 trait EmailManagement
 {
     /**
-     * Récupérer les emails par dossier - FONCTION CORRIGÉE
+     * Récupérer les emails par dossier
      */
     public function getEmails(Request $request, $folder = 'inbox'): JsonResponse
     {
         try {
+
             $query = Email::where('user_id', auth()->id())
                 ->where('folder', $folder)
                 ->orderBy('created_at', 'desc');
 
-            // Si le dossier n'est pas la corbeille, exclure les supprimés
             if ($folder !== 'trash') {
                 $query->whereNull('deleted_at');
             }
 
-            // Recherche optionnelle
             if ($request->has('search') && trim($request->search) !== '') {
                 $search = $request->search;
-                $query->where(function($q) use ($search) {
+                Log::info('🔍 Filtrage par recherche', ['search' => $search]);
+
+                $query->where(function ($q) use ($search) {
                     $q->where('subject', 'like', "%{$search}%")
-                    ->orWhere('content', 'like', "%{$search}%")
-                    ->orWhere('from_email', 'like', "%{$search}%");
+                        ->orWhere('content', 'like', "%{$search}%")
+                        ->orWhere('from_email', 'like', "%{$search}%");
                 });
             }
 
             $emails = $query->limit(50)->get();
 
-            // Formater pour l'interface
-            $formattedEmails = $emails->map(function($email) {
+            $formattedEmails = $emails->map(function ($email) {
                 return [
                     'id' => $email->id,
                     'from' => $email->from_email,
@@ -62,13 +62,13 @@ trait EmailManagement
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Erreur récupération emails', ['error' => $e->getMessage()]);
+            Log::error('❌ Erreur récupération emails', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Erreur récupération emails'], 500);
         }
     }
 
     /**
-     * Autocomplétion des adresses email - NOUVELLE FONCTION
+     * Autocomplétion des adresses email
      */
     public function getEmailSuggestions(Request $request): JsonResponse
     {
@@ -77,29 +77,30 @@ trait EmailManagement
         ]);
 
         if ($validator->fails()) {
+            Log::warning('⚠️ Validation autocomplétion échouée', ['errors' => $validator->errors()]);
             return response()->json(['error' => $validator->errors()], 422);
         }
 
         try {
             $query = $request->query;
-            
-            // Chercher dans les emails envoyés et reçus
+            Log::info('🔍 Recherche suggestions email', ['query' => $query]);
+
             $suggestions = Email::where('user_id', auth()->id())
-                ->where(function($emailQuery) use ($query) {
+                ->where(function ($emailQuery) use ($query) {
                     $emailQuery->where('to_email', 'like', "%{$query}%")
-                              ->orWhere('from_email', 'like', "%{$query}%")
-                              ->orWhere('from_name', 'like', "%{$query}%");
+                        ->orWhere('from_email', 'like', "%{$query}%")
+                        ->orWhere('from_name', 'like', "%{$query}%");
                 })
                 ->select('to_email', 'from_email', 'from_name', 'to_name')
                 ->distinct()
                 ->limit(10)
                 ->get();
 
-            // Formater les suggestions
+            Log::info('✅ Suggestions trouvées', ['count' => count($suggestions)]);
+
             $formattedSuggestions = collect();
-            
+
             foreach ($suggestions as $email) {
-                // Ajouter l'email de destination s'il match
                 if ($email->to_email && stripos($email->to_email, $query) !== false) {
                     $formattedSuggestions->push([
                         'email' => $email->to_email,
@@ -108,8 +109,7 @@ trait EmailManagement
                         'type' => 'sent_to'
                     ]);
                 }
-                
-                // Ajouter l'email expéditeur s'il match
+
                 if ($email->from_email && stripos($email->from_email, $query) !== false) {
                     $formattedSuggestions->push([
                         'email' => $email->from_email,
@@ -120,7 +120,6 @@ trait EmailManagement
                 }
             }
 
-            // Supprimer les doublons et limiter
             $uniqueSuggestions = $formattedSuggestions
                 ->unique('email')
                 ->take(8)
@@ -131,9 +130,9 @@ trait EmailManagement
                 'suggestions' => $uniqueSuggestions,
                 'query' => $query
             ]);
-            
+
         } catch (\Exception $e) {
-            Log::error('Erreur autocomplétion', ['error' => $e->getMessage()]);
+            Log::error('❌ Erreur autocomplétion', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Erreur autocomplétion'], 500);
         }
     }
@@ -146,11 +145,13 @@ trait EmailManagement
                 'is_read' => true,
                 'read_at' => Carbon::now()
             ]);
-            
+
+            Log::info('✅ Email marqué comme lu', ['email_id' => $emailId]);
+
             return response()->json(['success' => true]);
-            
+
         } catch (\Exception $e) {
-            Log::error('Erreur marquage lu', ['error' => $e->getMessage()]);
+            Log::error('❌ Erreur marquage lu', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Erreur marquage'], 500);
         }
     }
@@ -161,14 +162,57 @@ trait EmailManagement
             $email = Email::where('user_id', auth()->id())->findOrFail($emailId);
             $email->update([
                 'folder' => 'trash',
-                'deleted_at' => Carbon::now()  // ← CORRIGÉ
+                'deleted_at' => Carbon::now()
             ]);
+
+            Log::info('🗑️ Email déplacé dans la corbeille', ['email_id' => $emailId]);
 
             return response()->json(['success' => true, 'message' => 'Email déplacé vers la corbeille']);
 
         } catch (\Exception $e) {
-            Log::error('Erreur suppression email', ['error' => $e->getMessage()]);
+            Log::error('❌ Erreur suppression email', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Erreur suppression'], 500);
+        }
+    }
+
+    public function restoreEmail(Request $request, $emailId): JsonResponse
+    {
+        try {
+            $email = Email::where('user_id', auth()->id())
+                ->where('folder', 'trash')
+                ->findOrFail($emailId);
+
+            $email->update([
+                'folder' => 'inbox',
+                'deleted_at' => null
+            ]);
+
+            Log::info('♻️ Email restauré', ['email_id' => $emailId]);
+
+            return response()->json(['success' => true, 'message' => 'Email restauré.']);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur restauration email', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur restauration'], 500);
+        }
+    }
+
+    public function permanentDeleteEmail(Request $request, $emailId): JsonResponse
+    {
+        try {
+            $email = Email::where('user_id', auth()->id())
+                ->where('folder', 'trash')
+                ->findOrFail($emailId);
+
+            $email->delete();
+
+            Log::info('🗑️❌ Email supprimé définitivement', ['email_id' => $emailId]);
+
+            return response()->json(['success' => true, 'message' => 'Email supprimé définitivement.']);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur suppression définitive', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur suppression définitive'], 500);
         }
     }
 
@@ -182,6 +226,8 @@ trait EmailManagement
             $domain = substr(strrchr($email->from_email, "@"), 1);
             $trustedDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'protonmail.com'];
 
+            Log::info('🔍 Vérification email', ['email_id' => $emailId, 'domain' => $domain]);
+
             if (in_array($domain, $trustedDomains)) {
                 $email->update([
                     'folder' => 'inbox',
@@ -193,8 +239,13 @@ trait EmailManagement
                     'domain' => $domain
                 ]);
 
+                Email::where('user_id', auth()->id())
+                    ->where('from_email', $email->from_email)
+                    ->update(['signature_verified' => true]);
+
             } else {
                 if (!$request->has('force') || $request->input('force') !== '1') {
+                    Log::info('⚠️ Domaine inconnu, confirmation requise');
                     return response()->json([
                         'need_confirmation' => true,
                         'message' => "Le domaine «$domain» est inconnu. Confirmation nécessaire."
@@ -210,7 +261,13 @@ trait EmailManagement
                     'user_id' => auth()->id(),
                     'email' => $email->from_email
                 ]);
+
+                Email::where('user_id', auth()->id())
+                    ->where('from_email', $email->from_email)
+                    ->update(['signature_verified' => true]);
             }
+
+            Log::info('✅ Email vérifié et déplacé', ['email_id' => $emailId]);
 
             return response()->json([
                 'success' => true,
@@ -218,8 +275,8 @@ trait EmailManagement
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Erreur vérification email', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Erreur lors de la vérification.'], 500);
+            Log::error('❌ Erreur vérification email', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur vérification'], 500);
         }
     }
 
@@ -227,7 +284,9 @@ trait EmailManagement
     {
         try {
             $originalEmail = Email::where('user_id', auth()->id())->findOrFail($emailId);
-            
+
+            Log::info('✉️ Préparation réponse', ['email_id' => $emailId]);
+
             $replyData = [
                 'to' => $originalEmail->from_email,
                 'subject' => 'Re: ' . preg_replace('/^Re: /', '', $originalEmail->subject),
@@ -240,15 +299,15 @@ trait EmailManagement
                     'content' => $originalEmail->content
                 ]
             ];
-            
+
             return response()->json([
                 'success' => true,
                 'reply_data' => $replyData
             ]);
-            
+
         } catch (\Exception $e) {
-            Log::error('Erreur préparation réponse', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Erreur lors de la préparation de la réponse'], 500);
+            Log::error('❌ Erreur préparation réponse', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Erreur préparation réponse'], 500);
         }
     }
 }

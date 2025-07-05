@@ -28,6 +28,9 @@ class AdminController extends Controller
         $totalMessages = Email::count();
         $blockedUsersCount = User::whereNotNull('blocked_until')->where('blocked_until', '>', now())->count();
 
+        $spamCount = Email::where('is_spam', 1)->count();
+        $hamCount = Email::where('is_spam', 0)->count();
+
         $recentUsers = User::orderBy('created_at', 'desc')->take(5)->get();
 
         $days = collect(range(6, 0))->map(function ($i) {
@@ -48,6 +51,8 @@ class AdminController extends Controller
             'totalAdmins',
             'totalMessages',
             'blockedUsersCount',
+            'spamCount',
+            'hamCount',
             'recentUsers',
             'chartLabels',
             'chartData'

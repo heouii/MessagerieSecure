@@ -3,29 +3,20 @@
 @section('content')
 <div class="dashboard-wrapper">
 
-    {{-- Titre principal --}}
     <h1 class="dashboard-title">
         Bienvenue, {{ auth()->user()->prenom }} {{ auth()->user()->nom }}
     </h1>
 
-    {{-- Petit widget d’intro --}}
     <div class="dashboard-welcome">
         Heure actuelle : <span id="clock"></span>
     </div>
 
-    {{-- Grille des tuiles --}}
     <div class="dashboard-grid">
         <div class="tile">
             <i class="fas fa-envelope-open-text"></i>
             <h3>Messagerie Sécurisée</h3>
             <p>Envoyez et recevez vos messages cryptés.</p>
             <a href="{{ route('mailgun.index') }}">Ouvrir</a>
-        </div>
-        <div class="tile">
-            <i class="fas fa-chart-pie"></i>
-            <h3>Statistiques</h3>
-            <p>Consultez l’activité et vos indicateurs.</p>
-            <a href="{{ route('dashboard') }}">Consulter</a>
         </div>
         <div class="tile">
             <i class="fas fa-user-circle"></i>
@@ -43,12 +34,12 @@
 </div>
 
 <style>
-/* Fond général */
+
 body {
     background: #ece8f4;
 }
 
-/* Conteneur */
+
 .dashboard-wrapper {
     max-width: 1200px;
     margin: 0 auto;
@@ -58,7 +49,6 @@ body {
     align-items: center;
 }
 
-/* Titre */
 .dashboard-title {
     font-size: 2.8rem;
     font-weight: 700;
@@ -66,14 +56,12 @@ body {
     margin-bottom: 0.5rem;
 }
 
-/* Petit widget heure */
 .dashboard-welcome {
     font-size: 1rem;
     color: #555;
     margin-bottom: 2rem;
 }
 
-/* Grille de tuiles */
 .dashboard-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -81,7 +69,6 @@ body {
     width: 100%;
 }
 
-/* Tuile individuelle */
 .tile {
     background: #927ca6;
     color: #fff;

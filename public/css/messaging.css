@@ -1,0 +1,168 @@
+/* Variables CSS personnalisées */
+:root {
+    --primary-color: #BAA8D3;
+    --secondary-color: #9280A3;
+    --danger-color: #f97316;
+    --success-color: #10b981;
+    --light-gray: #f8f9fa;
+    --border-gray: #d1d5db;
+}
+
+/* Navigation */
+.navbar {
+    background-color: var(--primary-color);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+}
+
+/* Body layout */
+body {
+    background-color: var(--light-gray);
+    padding-top: 56px;
+}
+
+/* Sidebar styles */
+.sidebar {
+    min-height: 100vh;
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.sidebar a {
+    color: #adb5bd;
+    text-decoration: none;
+    display: block;
+    padding: 15px;
+}
+
+.sidebar a:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.sidebar-item:hover {
+    background-color: rgba(186, 168, 211, 0.3);
+}
+
+.sidebar-item.active {
+    background-color: rgba(186, 168, 211, 0.4);
+    border-right: 3px solid var(--primary-color);
+}
+
+.sidebar-item.unverified:hover {
+    background-color: rgba(249, 115, 22, 0.1);
+}
+
+.sidebar-item.unverified.active {
+    background-color: rgba(249, 115, 22, 0.2);
+    border-right: 3px solid var(--danger-color);
+}
+
+/* Email list styles */
+.email-item:hover {
+    background-color: #f8fafc;
+}
+
+.email-item.unread {
+    background-color: #fefefe;
+    font-weight: 600;
+}
+
+.email-item.unverified {
+    border-left: 4px solid var(--danger-color);
+    background-color: #fef7f0;
+}
+
+.email-item.verified {
+    border-left: 4px solid var(--success-color);
+}
+
+/* Compose editor */
+.compose-editor {
+    min-height: 300px;
+}
+
+/* Security badges */
+.security-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 9999px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.security-badge.verified {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.security-badge.unverified {
+    background-color: #fed7aa;
+    color: #9a3412;
+}
+
+/* Animations */
+.pulse-orange {
+    animation: pulse-orange 2s infinite;
+}
+
+@keyframes pulse-orange {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+/* Autocomplete styles */
+.autocomplete-container {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.autocomplete-suggestions {
+    border: 1px solid var(--border-gray);
+    border-radius: 0.375rem;
+    background-color: white;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    margin-top: 0.25rem;
+}
+
+.autocomplete-suggestion {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+}
+
+.autocomplete-suggestion:hover {
+    background-color: #f1f5f9;
+}
+
+/* Notifications */
+#notifications {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 9999;
+    pointer-events: none; 
+}
+
+#notifications > div {
+    pointer-events: auto;
+    margin-bottom: 10px;
+    min-width: 300px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Footer */
+footer {
+    background-color: var(--secondary-color);
+    color: white;
+    padding: 20px;
+    position: relative;
+    bottom: 0;
+    width: 100%;
+    text-align: center;
+}

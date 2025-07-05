@@ -137,23 +137,19 @@ function showAutocompleteSuggestions(field, suggestions) {
         suggestionsDiv.className = 'autocomplete-suggestions';
         container.appendChild(suggestionsDiv);
     }
-    
+
     suggestionsDiv.innerHTML = suggestions.map((suggestion, index) => `
-        <div class="suggestion-item" data-index="${index}" onclick="selectSuggestion(currentSuggestions[${index}])">
-            <div class="suggestion-main">
-                <div class="suggestion-email">${suggestion.email}</div>
-                ${suggestion.name ? `<div class="suggestion-name">${suggestion.name}</div>` : ''}
-                <div class="suggestion-context">${getSuggestionContext(suggestion)}</div>
-            </div>
-            <div class="suggestion-badge ${suggestion.type === 'sent_to' ? 'sent' : 'received'}">
-                ${suggestion.type === 'sent_to' ? 'Envoyé' : 'Reçu'}
-            </div>
+        <div class="suggestion-item clean-suggestion" data-index="${index}" onclick="selectSuggestion(currentSuggestions[${index}])">
+            <span class="email-text">${suggestion.email}</span>
         </div>
     `).join('');
-    
+
     suggestionsDiv.classList.add('show');
     selectedSuggestionIndex = -1;
 }
+
+
+
 
 function showNoResults(field) {
     const container = field.parentNode;
@@ -208,25 +204,30 @@ function navigateSuggestions(direction) {
 
 function selectSuggestion(suggestion) {
     if (!currentInputField || !suggestion) return;
-    
+
+    // Utilise display si dispo
     currentInputField.value = suggestion.email;
+
     hideAutocompleteSuggestions();
     loadEmailHistory(suggestion.email);
-    
+
     // Navigation automatique vers le champ suivant
     if (currentInputField.id === 'toField') {
         const ccField = document.getElementById('ccField');
-        if (ccField.value.trim() === '') {
+        if (ccField && ccField.value.trim() === '') {
             ccField.focus();
         } else {
-            document.getElementById('subjectField').focus();
+            const subjectField = document.getElementById('subjectField');
+            if (subjectField) subjectField.focus();
         }
     } else if (currentInputField.id === 'ccField') {
-        document.getElementById('subjectField').focus();
+        const subjectField = document.getElementById('subjectField');
+        if (subjectField) subjectField.focus();
     }
-    
-    showNotification(`Adresse sélectionnée : ${suggestion.email}`, 'success');
+
+    showNotification(`Adresse sélectionnée : ${suggestion.display || suggestion.email}`, 'success');
 }
+
 
 function hideAutocompleteSuggestions() {
     const suggestions = document.querySelectorAll('.autocomplete-suggestions');

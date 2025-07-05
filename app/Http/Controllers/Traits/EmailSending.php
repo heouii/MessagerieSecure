@@ -11,9 +11,6 @@ use App\Models\Email;
 
 trait EmailSending
 {
-    /**
-     * Envoi d'email avec gestion des pièces jointes
-     */
     public function sendEmail(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -27,12 +24,10 @@ trait EmailSending
         ]);
 
         if ($validator->fails()) {
-            Log::warning('⚠️ Validation envoi email échouée', ['errors' => $validator->errors()]);
             return response()->json(['error' => $validator->errors()], 422);
         }
 
         if ($this->isBlacklistedEmail($request->to)) {
-            Log::warning('⛔ Email bloqué', ['to' => $request->to]);
             return response()->json(['error' => 'Email ou domaine bloqué'], 403);
         }
 
@@ -43,10 +38,12 @@ trait EmailSending
                 'subject' => $request->subject,
             ];
 
+            // CC si présent
             if ($request->cc) {
                 $emailData['cc'] = $request->cc;
             }
 
+            // Format HTML ou texte
             $isHtmlFormat = in_array($request->html_format, ['1', 'true', 1, true], true);
             if ($isHtmlFormat) {
                 $emailData['html'] = nl2br(htmlspecialchars($request->message));
@@ -54,28 +51,58 @@ trait EmailSending
                 $emailData['text'] = $request->message;
             }
 
+            // Tracking
             $emailData['o:tracking'] = 'yes';
             $emailData['o:tracking-opens'] = 'yes';
             $emailData['o:tag'] = 'sent-email';
 
             // Traiter les pièces jointes
             $attachments = [];
+            $tempFiles = [];
 
             if ($request->hasFile('attachments')) {
-                foreach ($request->file('attachments') as $file) {
+                foreach ($request->file('attachments') as $index => $file) {
                     if (!$file->isValid()) {
-                        Log::error('❌ Fichier invalide', ['error' => $file->getErrorMessage()]);
+                        Log::error('Fichier invalide', ['error' => $file->getErrorMessage()]);
                         continue;
                     }
 
-                    $originalName = $file->getClientOriginalName();
-                    $attachments[] = [
-                        'filename' => $originalName,
-                        'safe_name' => time() . '_' . uniqid() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName),
-                        'size' => $file->getSize(),
-                        'mime_type' => $file->getMimeType(),
-                        'full_path' => $file->path()
-                    ];
+                    try {
+                        $originalName = $file->getClientOriginalName();
+                        $cleanName = $this->cleanFilename($originalName);
+                        $filename = time() . '_' . uniqid() . '_' . $cleanName;
+                        
+                        // Sauvegarder dans storage/app/public/attachments/
+                        $storagePath = 'attachments/' . $filename;
+                        $file->storeAs('public', $storagePath);
+                        
+                        $fullPath = storage_path('app/public/' . $storagePath);
+                        
+                        if (file_exists($fullPath)) {
+                            $attachments[] = [
+                                'filename' => $originalName,
+                                'stored_name' => $filename,
+                                'path' => $storagePath,
+                                'size' => $file->getSize(),
+                                'mime_type' => $file->getMimeType(),
+                                'full_path' => $fullPath // Pour l'envoi via cURL
+                            ];
+                            
+                            $tempFiles[] = $fullPath;
+                            
+                            Log::info('📎 Pièce jointe sauvegardée (outgoing)', [
+                                'original' => $originalName,
+                                'stored_as' => $filename,
+                                'size' => filesize($fullPath)
+                            ]);
+                        }
+
+                    } catch (\Exception $fileEx) {
+                        Log::error('Erreur traitement fichier', [
+                            'error' => $fileEx->getMessage(),
+                            'file' => $originalName ?? 'inconnu'
+                        ]);
+                    }
                 }
             }
 
@@ -84,6 +111,7 @@ trait EmailSending
                 'attachments_count' => count($attachments)
             ]);
 
+            // Envoyer l'email
             if (empty($attachments)) {
                 $response = $this->sendSimpleEmail($emailData);
             } else {
@@ -104,7 +132,7 @@ trait EmailSending
                     'preview' => substr($request->message, 0, 100),
                     'is_html' => $isHtmlFormat,
                     'is_read' => true,
-                    'attachments' => json_encode(array_map(function ($a) {
+                    'attachments' => json_encode(array_map(function($a) {
                         unset($a['full_path']);
                         return $a;
                     }, $attachments)),
@@ -119,7 +147,6 @@ trait EmailSending
                 ]);
             }
 
-            Log::error('❌ Échec envoi email', ['error' => $response['error'] ?? 'Inconnue']);
             return response()->json(['error' => 'Erreur lors de l\'envoi: ' . ($response['error'] ?? 'Inconnue')], 500);
 
         } catch (\Exception $e) {
@@ -131,6 +158,9 @@ trait EmailSending
             return response()->json(['error' => 'Erreur système: ' . $e->getMessage()], 500);
         }
     }
+
+  
+    
 
     private function sendSimpleEmail(array $emailData): array
     {
@@ -146,8 +176,6 @@ trait EmailSending
 
             if ($response->successful()) {
                 $data = $response->json();
-                Log::info('✅ Email simple envoyé', ['id' => $data['id'] ?? null]);
-
                 return [
                     'success' => true,
                     'mailgun_id' => $data['id'] ?? null,
@@ -155,7 +183,7 @@ trait EmailSending
                 ];
             }
 
-            Log::error('❌ Erreur HTTP simple', ['status' => $response->status(), 'body' => $response->body()]);
+            Log::error('❌ Erreur HTTP simple', ['status' => $response->status()]);
             return ['success' => false, 'error' => 'HTTP ' . $response->status()];
 
         } catch (\Exception $e) {
@@ -169,17 +197,20 @@ trait EmailSending
         try {
             $url = "https://{$this->mailgunEndpoint}/v3/{$this->mailgunDomain}/messages";
 
-            Log::info('📎 Envoi email avec pièces jointes', [
+            Log::info('📎 Envoi avec pièces jointes', [
                 'attachments_count' => count($attachments)
             ]);
 
+            // Construire la commande cURL
             $cmd = "curl -s " . escapeshellarg($url);
             $cmd .= " -u " . escapeshellarg("api:{$this->mailgunSecret}");
 
+            // Paramètres de base
             $params = array_merge([
                 'from' => config('mail.from.name') . ' <' . config('mail.from.address') . '>',
             ], $emailData);
 
+            // Ajouter les paramètres
             foreach ($params as $key => $value) {
                 if (is_array($value)) {
                     foreach ($value as $arrayValue) {
@@ -190,6 +221,7 @@ trait EmailSending
                 }
             }
 
+            // Ajouter les pièces jointes
             foreach ($attachments as $attachment) {
                 if (file_exists($attachment['full_path'])) {
                     $cmd .= " -F " . escapeshellarg("attachment=@{$attachment['full_path']}");
@@ -199,19 +231,20 @@ trait EmailSending
                         'size' => filesize($attachment['full_path'])
                     ]);
                 } else {
-                    Log::error('❌ Pièce jointe introuvable', [
+                    Log::error('❌ Fichier non trouvé', [
                         'path' => $attachment['full_path']
                     ]);
                 }
             }
 
+            // Exécuter la commande
             $output = [];
             $returnCode = 0;
             exec($cmd, $output, $returnCode);
 
             $response = implode("\n", $output);
 
-            Log::info('✅ Résultat envoi email avec pièces jointes', [
+            Log::info('✅ Résultat envoi', [
                 'return_code' => $returnCode,
                 'response' => $response
             ]);
@@ -230,8 +263,14 @@ trait EmailSending
             return ['success' => false, 'error' => "Erreur cURL: {$response}"];
 
         } catch (\Exception $e) {
-            Log::error('❌ Exception cURL envoi', ['error' => $e->getMessage()]);
+            Log::error('❌ Exception cURL', ['error' => $e->getMessage()]);
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    // Méthode pour vérifier les emails blacklistés (à implémenter)
+    private function isBlacklistedEmail(string $email): bool
+    {
+        return false; // Simplifié pour l'instant
     }
 }

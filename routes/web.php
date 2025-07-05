@@ -150,17 +150,6 @@ Route::get('/check-email-exists', function (\Illuminate\Http\Request $request) {
     return response()->json($exists);
 });
 
-Route::get('/download-attachment/{path}', function($path) {
-    $fullPath = storage_path('app/public/' . $path);
-
-    if (!file_exists($fullPath)) {
-        abort(404, "Fichier introuvable");
-    }
-
-    return response()->download($fullPath);
-})->where('path', '.*')->middleware('auth');
-
-
 
 
 
@@ -200,3 +189,36 @@ Route::get('/test-spam', function() {
         'tests' => $results
     ]);
 })->middleware('auth');
+
+// Route principale pour tous les attachments
+Route::get('/storage/attachments/{filename}', function($filename) {
+    // Chercher dans les différents emplacements
+    $paths = [
+        storage_path('app/public/attachments/' . $filename), // Racine attachments
+        storage_path('app/public/attachments/incoming/' . $filename), // Sous-dossier incoming
+        storage_path('app/public/attachments/outgoing/' . $filename), // Sous-dossier outgoing
+    ];
+    
+    foreach ($paths as $path) {
+        if (file_exists($path)) {
+            return response()->download($path);
+        }
+    }
+    
+    abort(404, "Fichier non trouvé: " . $filename);
+})->middleware('auth')->name('download.attachment');
+
+// Route pour les sous-dossiers spécifiques
+Route::get('/storage/attachments/{folder}/{filename}', function($folder, $filename) {
+    if (!in_array($folder, ['incoming', 'outgoing'])) {
+        abort(404);
+    }
+    
+    $path = storage_path("app/public/attachments/{$folder}/" . $filename);
+    
+    if (!file_exists($path)) {
+        abort(404, "Fichier non trouvé");
+    }
+    
+    return response()->download($path);
+})->middleware('auth')->name('download.attachment.folder');

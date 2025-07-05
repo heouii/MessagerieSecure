@@ -10,7 +10,7 @@
                 ['label' => 'Utilisateurs inscrits', 'value' => $totalUsers, 'icon' => 'fas fa-users', 'color' => '#B39DDB', 'link' => route('admin.users')],
                 ['label' => 'Admins', 'value' => $totalAdmins, 'icon' => 'fas fa-user-shield', 'color' => '#9575CD'],
                 ['label' => 'Messages envoyés', 'value' => $totalMessages, 'icon' => 'fas fa-envelope', 'color' => '#7986CB'],
-                ['label' => 'Utilisateurs bloqués', 'value' => $blockedUsersCount, 'icon' => 'fas fa-user-lock', 'color' => '#CE93D8', 'link' => route('admin.users')],
+                ['label' => 'Emails détectés comme virus', 'value' => $virusCount, 'icon' => 'fas fa-bug', 'color' => '#EF5350'],
             ];
         @endphp
 

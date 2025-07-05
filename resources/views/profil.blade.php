@@ -59,7 +59,7 @@
                         </div>
 
                         <hr class="my-4">
-                        <h5>Question de sécurité</h5>
+                        <h5>Question de sécurité : </h5><br>
                         <div class="mb-3">
                             <label for="security_question" class="form-label">Choisissez votre question de sécurité</label>
                             <select name="security_question" id="security_question" class="form-control" required>

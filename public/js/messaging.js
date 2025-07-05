@@ -252,7 +252,7 @@ function displayErrorState() {
 // Affichage des emails
 function displayEmails(emails) {
     emailList.innerHTML = emails.map(email => {
-        const isVerified = email.signature_verified !== false && currentView !== 'unverified';
+        const isVerified = (email.mailgun_id && email.mailgun_id.length > 0) || (email.signature_verified !== false && currentView !== 'unverified');
         const securityClass = isVerified ? 'verified' : 'unverified';
         const securityBadge = isVerified 
             ? '<span class="security-badge verified"><i class="fas fa-shield-check mr-1"></i>Vérifié</span>'

@@ -6,12 +6,14 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Traits\EmailSending;
 use App\Http\Controllers\Traits\EmailReceiving;
 use App\Http\Controllers\Traits\EmailManagement;
+use App\Http\Controllers\Traits\FileUtilities;
 use Illuminate\Support\Facades\Log; 
 use App\Models\User;
 
 class MailgunController extends Controller
 {
-    use EmailSending, EmailReceiving, EmailManagement;
+    use EmailSending, EmailReceiving, EmailManagement, FileUtilities;
+    
 
     private $mailgunDomain;
     private $mailgunSecret;

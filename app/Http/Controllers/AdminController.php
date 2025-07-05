@@ -23,6 +23,7 @@ class AdminController extends Controller
             abort(403);
         }
 
+
         $totalUsers = User::count();
         $totalAdmins = User::where('admin', 1)->count();
         $totalMessages = Email::count();
@@ -30,6 +31,8 @@ class AdminController extends Controller
 
         $spamCount = Email::where('is_spam', 1)->count();
         $hamCount = Email::where('is_spam', 0)->count();
+
+        $virusCount = Email::where('folder', 'virus')->count();
 
         $recentUsers = User::orderBy('created_at', 'desc')->take(5)->get();
 
@@ -45,6 +48,12 @@ class AdminController extends Controller
             return User::whereDate('created_at', $day->format('Y-m-d'))->count();
         });
 
+        $virusChartData = $days->map(function ($day) {
+            return Email::where('folder', 'virus')
+                ->whereDate('created_at', $day->format('Y-m-d'))
+                ->count();
+        });
+
         return view('admin.dashboard', compact(
             'user',
             'totalUsers',
@@ -53,9 +62,11 @@ class AdminController extends Controller
             'blockedUsersCount',
             'spamCount',
             'hamCount',
+            'virusCount',
             'recentUsers',
             'chartLabels',
-            'chartData'
+            'chartData',
+            'virusChartData'
         ));
     }
 

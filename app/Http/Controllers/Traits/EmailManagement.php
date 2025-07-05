@@ -52,6 +52,7 @@ trait EmailManagement
                     'read' => $email->is_read,
                     'attachments' => $email->attachments ? json_decode($email->attachments, true) : [],
                     'signature_verified' => $email->signature_verified ?? true,
+                    'mailgun_id' => $email->mailgun_id,
                 ];
             });
 
@@ -82,7 +83,7 @@ trait EmailManagement
         }
 
         try {
-            $query = $request->query;
+            $query = $request->input('query');
             Log::info('🔍 Recherche suggestions email', ['query' => $query]);
 
             $suggestions = Email::where('user_id', auth()->id())
@@ -223,11 +224,13 @@ trait EmailManagement
                 ->where('folder', 'unverified')
                 ->findOrFail($emailId);
 
+            // Toujours extraire le domaine
             $domain = substr(strrchr($email->from_email, "@"), 1);
-            $trustedDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'protonmail.com'];
+            $trustedDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'protonmail.com', 'mg.missive-si.fr'];
 
             Log::info('🔍 Vérification email', ['email_id' => $emailId, 'domain' => $domain]);
 
+            // Si domaine connu
             if (in_array($domain, $trustedDomains)) {
                 $email->update([
                     'folder' => 'inbox',
@@ -243,31 +246,40 @@ trait EmailManagement
                     ->where('from_email', $email->from_email)
                     ->update(['signature_verified' => true]);
 
-            } else {
-                if (!$request->has('force') || $request->input('force') !== '1') {
-                    Log::info('⚠️ Domaine inconnu, confirmation requise');
-                    return response()->json([
-                        'need_confirmation' => true,
-                        'message' => "Le domaine «$domain» est inconnu. Confirmation nécessaire."
-                    ]);
-                }
+                Log::info('✅ Email vérifié et déplacé (domaine approuvé)', ['email_id' => $emailId]);
 
-                $email->update([
-                    'folder' => 'inbox',
-                    'signature_verified' => true
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Email vérifié et déplacé en boîte de réception.'
                 ]);
-
-                \App\Models\ApprovedSender::firstOrCreate([
-                    'user_id' => auth()->id(),
-                    'email' => $email->from_email
-                ]);
-
-                Email::where('user_id', auth()->id())
-                    ->where('from_email', $email->from_email)
-                    ->update(['signature_verified' => true]);
             }
 
-            Log::info('✅ Email vérifié et déplacé', ['email_id' => $emailId]);
+            // Si domaine inconnu et pas forcé
+            if (!$request->has('force') || $request->input('force') !== '1') {
+                Log::info('⚠️ Domaine inconnu, confirmation requise', ['domain' => $domain]);
+
+                return response()->json([
+                    'need_confirmation' => true,
+                    'message' => "Le domaine «{$domain}» est inconnu. Confirmation nécessaire."
+                ]);
+            }
+
+            // Si forçage
+            $email->update([
+                'folder' => 'inbox',
+                'signature_verified' => true
+            ]);
+
+            \App\Models\ApprovedSender::firstOrCreate([
+                'user_id' => auth()->id(),
+                'email' => $email->from_email
+            ]);
+
+            Email::where('user_id', auth()->id())
+                ->where('from_email', $email->from_email)
+                ->update(['signature_verified' => true]);
+
+            Log::info('✅ Email vérifié et déplacé (forçage)', ['email_id' => $emailId]);
 
             return response()->json([
                 'success' => true,
@@ -276,9 +288,11 @@ trait EmailManagement
 
         } catch (\Exception $e) {
             Log::error('❌ Erreur vérification email', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Erreur vérification'], 500);
+            return response()->json(['error' => 'Erreur vérification : '.$e->getMessage()], 500);
         }
     }
+
+
 
     public function replyToEmail(Request $request, $emailId): JsonResponse
     {

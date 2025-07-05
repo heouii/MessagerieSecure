@@ -33,7 +33,7 @@ class AdminConnexionController extends Controller
                 $user = $userId ? User::find($userId) : null;
                 $lastActivity = Carbon::createFromTimestamp($file->getMTime(), 'UTC')->setTimezone('Europe/Paris');
 
-                $connexions[] = (object)[
+                $connexions[] = (object) [
                     'prenom' => $user->prenom ?? null,
                     'nom' => $user->nom ?? null,
                     'email' => $user->email ?? null,
@@ -42,7 +42,7 @@ class AdminConnexionController extends Controller
             }
         }
 
-        usort($connexions, function($a, $b) {
+        usort($connexions, function ($a, $b) {
             return $b->last_activity->timestamp <=> $a->last_activity->timestamp;
         });
 

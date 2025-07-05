@@ -1,7 +1,6 @@
 <div id="composeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center h-full p-4">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-screen overflow-y-auto">
-            <!-- Header -->
             <div class="flex items-center justify-between p-4 border-b border-gray-200">
                 <h3 class="text-lg font-semibold text-gray-800">Nouveau message</h3>
                 <button id="closeComposeBtn" class="text-gray-500 hover:text-gray-700">
@@ -9,23 +8,22 @@
                 </button>
             </div>
             
-            <!-- Formulaire -->
             <form id="composeForm" class="flex flex-col h-full">
                 <!-- Champs d'en-tête -->
                 <div class="p-4 space-y-4 border-b border-gray-200">
                     <div class="flex items-center space-x-2">
                         <label class="text-sm font-medium text-gray-700 w-16">À :</label>
-                        <input type="email" id="toField" required
+                        <input type="text" id="toField" required
                                class="flex-1 px-3 py-2 border border-gray-300 rounded" 
                                style="--tw-ring-color: #BAA8D3;" 
                                onfocus="this.style.borderColor='#9280A3'" 
                                onblur="this.style.borderColor='#BAA8D3'"
-                               placeholder="destinataire@exemple.com">
+                               placeholder="destinataires séparés par des virgules">
                     </div>
                     
                     <div class="flex items-center space-x-2">
                         <label class="text-sm font-medium text-gray-700 w-16">Cc :</label>
-                        <input type="email" id="ccField"
+                        <input type="text" id="ccField"
                                class="flex-1 px-3 py-2 border border-gray-300 rounded" 
                                style="--tw-ring-color: #BAA8D3;" 
                                onfocus="this.style.borderColor='#9280A3'" 

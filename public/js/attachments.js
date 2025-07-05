@@ -1,4 +1,4 @@
-// Gestion des pièces jointes
+// Gestion des pièces jointes - VERSION CORRIGÉE
 
 // Sélection de fichiers
 function handleFileSelect(e) {
@@ -69,7 +69,7 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// Affichage des pièces jointes dans la lecture d'email
+// Affichage des pièces jointes dans la lecture d'email - VERSION CORRIGÉE
 function displayEmailAttachments(attachments, emailId) {
     const emailAttachmentsDiv = document.getElementById('emailAttachments');
     const attachmentsListDiv = document.getElementById('attachmentsList');
@@ -104,6 +104,22 @@ function displayEmailAttachments(attachments, emailId) {
     attachmentsListDiv.innerHTML = attachmentData.map((attachment) => {
         const filename = attachment.filename || 'Fichier';
         const size = attachment.size || 0;
+        
+        // Construire l'URL de téléchargement
+        let downloadUrl;
+        
+        if (attachment.path) {
+            // Le chemin contient déjà "attachments/incoming/" ou "attachments/outgoing/"
+            downloadUrl = `/storage/${attachment.path}`;
+        } else if (attachment.stored_name) {
+            // Fallback : utiliser le nom stocké
+            downloadUrl = `/storage/attachments/${attachment.stored_name}`;
+        } else {
+            // Dernière option : utiliser le nom original encodé
+            downloadUrl = `/storage/attachments/${encodeURIComponent(filename)}`;
+        }
+
+        console.log('🔗 URL générée pour téléchargement:', downloadUrl, attachment);
 
         return `
             <div class="flex items-center justify-between bg-gray-50 p-3 rounded">
@@ -114,11 +130,20 @@ function displayEmailAttachments(attachments, emailId) {
                         <p class="text-xs text-gray-500">${formatFileSize(size)}</p>
                     </div>
                 </div>
-                <a href="/download-attachment/attachments/${encodeURIComponent(attachment.path || attachment.safe_name || filename)}"
-                   class="text-purple-600 hover:text-purple-800 text-sm" target="_blank">
+                <a href="${downloadUrl}" class="text-purple-600 hover:text-purple-800 text-sm" target="_blank">
                     <i class="fas fa-download mr-1"></i>Télécharger
                 </a>
             </div>
         `;
     }).join('');
+}
+
+// Fonction de debug pour tester les URLs
+function debugAttachmentUrl(attachment) {
+    console.log('🔍 Debug attachment:', {
+        filename: attachment.filename,
+        path: attachment.path,
+        stored_name: attachment.stored_name,
+        url_generated: attachment.path ? `/storage/${attachment.path}` : `/storage/attachments/${attachment.stored_name || attachment.filename}`
+    });
 }

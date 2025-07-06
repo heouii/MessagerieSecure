@@ -138,3 +138,45 @@ async function deleteDraft(draftId) {
         showNotification('Erreur de connexion', 'error');
     }
 }
+
+// Fonction pour sauvegarder un brouillon
+async function handleSaveDraft() {
+    const to = document.getElementById('toField').value;
+    const cc = document.getElementById('ccField') ? document.getElementById('ccField').value : '';
+    const subject = document.getElementById('subjectField').value;
+    const content = document.getElementById('messageField').value;
+
+    try {
+        const response = await fetch('/emails/draft', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                to: to,
+                cc: cc,
+                subject: subject,
+                content: content
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('Brouillon enregistré', 'success');
+            document.getElementById('composeModal').classList.add('hidden');
+            loadEmails();
+        } else {
+            showNotification(data.error || 'Erreur lors de l\'enregistrement', 'error');
+        }
+    } catch (error) {
+        console.error('Erreur sauvegarde brouillon:', error);
+        showNotification('Erreur réseau lors de la sauvegarde', 'error');
+    }
+}

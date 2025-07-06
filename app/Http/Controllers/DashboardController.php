@@ -18,7 +18,6 @@ class DashboardController extends Controller
                 ->whereNotNull('read_at')->count(),
         ];
 
-        // Messages récents (remplace l'ancien système)
         $messages = SecureMessage::where('recipient_email', Auth::user()->email)
             ->latest()
             ->take(10)

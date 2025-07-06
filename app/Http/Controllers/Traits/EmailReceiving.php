@@ -53,18 +53,43 @@ trait EmailReceiving
                 })
                 ->exists();
 
+            Log::info('🔍 Vérification expéditeur', [
+                'from_email' => $fromEmail,
+                'domain' => $domain,
+                'user_id' => $userId,
+                'is_approved' => $isApproved,
+                'signature_valid' => $isSignatureValid
+            ]);
+
             $folder = 'inbox';
-            if ($spamClassification['is_spam'] && $spamClassification['spam_probability'] > 0.4) { // Réduit de 0.7 à 0.4
+            if ($spamClassification['is_spam'] && $spamClassification['spam_probability'] > 0.4) {
                 $folder = 'spam';
+                Log::info('📧 Email classé comme SPAM', ['spam_probability' => $spamClassification['spam_probability']]);
             } elseif (!$isSignatureValid && !$isApproved) {
                 $folder = 'unverified';
+                Log::info('📧 Email classé comme NON VÉRIFIÉ', [
+                    'signature_valid' => $isSignatureValid,
+                    'approved' => $isApproved,
+                    'from_email' => $fromEmail
+                ]);
+            } else {
+                Log::info('📧 Email classé dans BOÎTE DE RÉCEPTION', [
+                    'signature_valid' => $isSignatureValid,
+                    'approved' => $isApproved,
+                    'from_email' => $fromEmail
+                ]);
             }
 
             Log::info('📁 Dossier déterminé', [
                 'folder' => $folder,
                 'signature_valid' => $isSignatureValid,
                 'approved' => $isApproved,
-                'spam_probability' => $spamClassification['spam_probability']
+                'spam_probability' => $spamClassification['spam_probability'],
+                'is_spam' => $spamClassification['is_spam'],
+                'logic' => [
+                    'is_spam_and_high_probability' => ($spamClassification['is_spam'] && $spamClassification['spam_probability'] > 0.4),
+                    'signature_invalid_and_not_approved' => (!$isSignatureValid && !$isApproved)
+                ]
             ]);
 
             // TRAITEMENT DES PIÈCES JOINTES CORRIGÉ
@@ -129,7 +154,7 @@ trait EmailReceiving
                 'preview' => substr($bodyPlain ?: strip_tags($bodyHtml), 0, 100),
                 'is_html' => !empty($bodyHtml),
                 'is_read' => false,
-                'signature_verified' => $isSignatureValid || $isApproved,
+                'signature_verified' => $isSignatureValid,
                 'attachments' => json_encode($attachments),
                 'is_spam' => $spamClassification['is_spam'],
                 'spam_probability' => $spamClassification['spam_probability'],

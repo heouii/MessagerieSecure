@@ -1,6 +1,5 @@
 <nav id="sidebarMenu" class="sidebar d-md-block bg-gradient">
     <div class="position-sticky pt-3">
-        <h5 class="text-white px-3 mb-3 fw-bold">Admin Panel</h5>
         <ul class="nav flex-column">
             <li class="nav-item mb-1">
                 <a href="{{ route('admin.dashboard') }}" class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">

@@ -58,4 +58,62 @@ class MailgunController extends Controller
         Log::info('Utilisateur non trouvé pour l\'email', ['email' => $cleanEmail]);
         return null;
     }
+
+    public function storeDraft(Request $request): JsonResponse
+{
+    try {
+        $validator = Validator::make($request->all(), [
+            'to' => 'nullable|email',
+            'cc' => 'nullable|email', 
+            'subject' => 'nullable|string|max:255',
+            'content' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'error' => $validator->errors()->first()
+            ], 422);
+        }
+
+        $draft = Email::create([
+            'user_id' => auth()->id(),
+            'folder' => 'drafts',
+            'from_email' => auth()->user()->email,
+            'from_name' => auth()->user()->prenom . ' ' . auth()->user()->nom,
+            'to_email' => $request->to,
+            'cc_email' => $request->cc,
+            'subject' => $request->subject ?: 'Brouillon sans objet',
+            'content' => $request->content ?: '',
+            'preview' => substr($request->content ?: '', 0, 100),
+            'is_html' => false,
+            'is_read' => true,
+            'signature_verified' => true,
+            'attachments' => json_encode([]),
+        ]);
+
+        Log::info('✅ Brouillon sauvegardé', [
+            'draft_id' => $draft->id,
+            'user_id' => auth()->id()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Brouillon sauvegardé avec succès',
+            'draft_id' => $draft->id
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Erreur sauvegarde brouillon', [
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'user_id' => auth()->id()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'error' => 'Erreur lors de la sauvegarde du brouillon'
+        ], 500);
+    }
+}
 }
